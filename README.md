@@ -145,7 +145,7 @@ MIT License – see [LICENSE](LICENSE)
 
 ## Hackathon Submission Notes
 
-- **Track suggestion**: Best Apps and Agents / Personal AI
+- **Track suggestion**: Best Apps and Agents
 - Public repository: this repo
 - Open source license: MIT
 - NVIDIA model used: `nvidia/Nemotron-3.5-Lightning`

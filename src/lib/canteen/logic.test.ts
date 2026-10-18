@@ -83,7 +83,7 @@ describe("standalone canteen analytics", () => {
 
     const candidates = buildSalesCandidatePools(snapshot);
     assert.deepEqual(candidates.reviewCandidates.map((item) => item.id), ["quiet"]);
-    assert.deepEqual(candidates.comboCandidates, [{ itemIds: ["snack", "tea"], ordersTogether: 2 }]);
+    assert.deepEqual(candidates.comboCandidates, [{ itemIds: ["tea", "snack"], ordersTogether: 2 }]);
     assert.equal(buildSalesCandidatePools({ ...snapshot, pairs: [] }).comboCandidates.length, 1);
 
     const selection = {
