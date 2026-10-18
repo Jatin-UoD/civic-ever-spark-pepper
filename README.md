@@ -119,7 +119,7 @@ Source: `src/lib/canteen/nemotron.server.ts`
 
 ### Admin sales insights
 
-Canteen admins can request a 14-day snapshot of paid item sales, including quantity, revenue, last order time, and observed co-purchases. The server verifies canteen access and calculates these figures before Nemotron selects review candidates, top sellers to feature, and combo ideas. Low-sales items are review candidates only; no menu item is automatically discontinued or changed.
+Canteen admins can request a 14-day snapshot of paid item sales, including quantity, revenue, last order time, and observed co-purchases. The server verifies canteen access and calculates these figures before Nemotron selects review candidates, top sellers to feature, and combo ideas. The root `canteen-analytics.js` module supplies the shared ranking, candidate-selection, and recommendation-validation logic used by the server. Low-sales items are review candidates only; no menu item is automatically discontinued or changed.
 
 ---
 
@@ -130,6 +130,7 @@ src/
   lib/canteen/          # Domain logic + Nemotron integration
   routes/               # Pages (menu, cart, staff, admin...)
   components/
+canteen-analytics.js   # Shared sales ranking and recommendation validation
 server/                 # Server middleware
 migrations/             # Database migrations + seed data
 ```

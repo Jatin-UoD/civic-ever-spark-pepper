@@ -131,6 +131,40 @@ describe("canteen ordering invariants", () => {
   it("builds a 14-day paid-sales snapshot and restricts it to canteen admins", async () => {
     const institutionAdmin = await tx((sql) => actorFrom(sql, "user_demo_institution"));
     const customer = await tx((sql) => actorFrom(sql, "user_demo_customer"));
+
+    await tx((sql) => sql.query(
+      "update orders set placed_at = now() - interval '30 days' where id = $1",
+      ["ord_hist_1"],
+    ));
+    try {
+      const expired = await tx((sql) => salesSnapshot(sql, institutionAdmin, "canteen_central"));
+      const expiredSandwich = expired.items.find((item) => item.id === "itm_veg_sandwich");
+      assert.equal(expiredSandwich?.quantitySold, 0);
+      assert.equal(expiredSandwich?.revenuePaise, 0);
+      assert.equal(expiredSandwich?.lastOrderedAt, null);
+    } finally {
+      await tx((sql) => sql.query(
+        "update orders set placed_at = now() - interval '2 days' where id = $1",
+        ["ord_hist_1"],
+      ));
+    }
+
+    await tx((sql) => sql.query(
+      "update orders set payment_status = 'FAILED' where id = $1",
+      ["ord_hist_1"],
+    ));
+    try {
+      const unpaid = await tx((sql) => salesSnapshot(sql, institutionAdmin, "canteen_central"));
+      const unpaidSandwich = unpaid.items.find((item) => item.id === "itm_veg_sandwich");
+      assert.equal(unpaidSandwich?.quantitySold, 0);
+      assert.equal(unpaidSandwich?.revenuePaise, 0);
+    } finally {
+      await tx((sql) => sql.query(
+        "update orders set payment_status = 'PAID' where id = $1",
+        ["ord_hist_1"],
+      ));
+    }
+
     const snapshot = await tx((sql) => salesSnapshot(sql, institutionAdmin, "canteen_central"));
     const sandwichItem = snapshot.items.find((item) => item.id === "itm_veg_sandwich");
 

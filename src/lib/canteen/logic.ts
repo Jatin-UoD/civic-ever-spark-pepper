@@ -1536,8 +1536,8 @@ export async function salesSnapshot(sql: Sql, actor: Actor, canteenId: string): 
 
   const rows = await sql.query<Row>(
     `select i.id, i.name, c.name as category_name, i.availability,
-            coalesce(sum(oi.qty), 0)::int as quantity_sold,
-            coalesce(sum(oi.line_paise), 0)::int as revenue_paise,
+            coalesce(sum(oi.qty) filter (where o.id is not null), 0)::int as quantity_sold,
+            coalesce(sum(oi.line_paise) filter (where o.id is not null), 0)::int as revenue_paise,
             max(o.placed_at)::text as last_ordered_at
      from items i
      join categories c on c.id = i.category_id
