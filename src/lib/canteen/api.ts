@@ -305,18 +305,6 @@ export const getAnalytics = createServerFn({ method: "GET" })
     return analytics(sql, actor, data.canteenId ?? null, data.institutionId ?? null);
   }));
 
-export const getSalesInsights = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .validator((input: unknown) => z.object({ canteenId: id }).parse(input))
-  .handler(async ({ data, context }) => {
-    rateLimit(`sales-insights:${context.userId}:${data.canteenId}`, 3, 60_000);
-    return read(context.userId, async (sql, actor) => {
-      const { salesSnapshot } = await import("./logic.ts");
-      const { generateSalesInsights } = await import("./nemotron.server.ts");
-      return generateSalesInsights(await salesSnapshot(sql, actor, data.canteenId));
-    });
-  });
-
 const demandPricingSettings = z.object({
   moderateDemandPercent: z.number().int().min(1).max(1000),
   moderatePricePercent: z.number().int().min(0).max(20),

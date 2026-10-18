@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as InstitutionRouteImport } from './routes/institution'
@@ -21,8 +22,13 @@ import { Route as StaffRouteImport } from './routes/staff'
 import { Route as CheckoutCanteenIdRouteImport } from './routes/checkout.$canteenId'
 import { Route as MenuCanteenIdRouteImport } from './routes/menu.$canteenId'
 import { Route as TrackOrderIdRouteImport } from './routes/track.$orderId'
+import { Route as ApiAnalyticsContextRouteImport } from './routes/api/analytics/context'
+import { Route as ApiAnalyticsOverviewRouteImport } from './routes/api/analytics/overview'
+import { Route as ApiAnalyticsRecommendationsRouteImport } from './routes/api/analytics/recommendations'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiPaymentsWebhookRouteImport } from './routes/api/payments/webhook'
+import { Route as ApiAnalyticsExportCsvRouteImport } from './routes/api/analytics/export.csv'
+import { Route as ApiAnalyticsRecommendationsDecideRouteImport } from './routes/api/analytics/recommendations/decide'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -32,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BrowseRoute = BrowseRouteImport.update({
@@ -84,6 +95,22 @@ const TrackOrderIdRoute = TrackOrderIdRouteImport.update({
   path: '/track/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAnalyticsContextRoute = ApiAnalyticsContextRouteImport.update({
+  id: '/api/analytics/context',
+  path: '/api/analytics/context',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAnalyticsOverviewRoute = ApiAnalyticsOverviewRouteImport.update({
+  id: '/api/analytics/overview',
+  path: '/api/analytics/overview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAnalyticsRecommendationsRoute =
+  ApiAnalyticsRecommendationsRouteImport.update({
+    id: '/api/analytics/recommendations',
+    path: '/api/analytics/recommendations',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -94,10 +121,22 @@ const ApiPaymentsWebhookRoute = ApiPaymentsWebhookRouteImport.update({
   path: '/api/payments/webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAnalyticsExportCsvRoute = ApiAnalyticsExportCsvRouteImport.update({
+  id: '/api/analytics/export/csv',
+  path: '/api/analytics/export/csv',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAnalyticsRecommendationsDecideRoute =
+  ApiAnalyticsRecommendationsDecideRouteImport.update({
+    id: '/decide',
+    path: '/decide',
+    getParentRoute: () => ApiAnalyticsRecommendationsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/browse': typeof BrowseRoute
   '/history': typeof HistoryRoute
   '/institution': typeof InstitutionRoute
@@ -108,12 +147,18 @@ export interface FileRoutesByFullPath {
   '/checkout/$canteenId': typeof CheckoutCanteenIdRoute
   '/menu/$canteenId': typeof MenuCanteenIdRoute
   '/track/$orderId': typeof TrackOrderIdRoute
+  '/api/analytics/context': typeof ApiAnalyticsContextRoute
+  '/api/analytics/overview': typeof ApiAnalyticsOverviewRoute
+  '/api/analytics/recommendations': typeof ApiAnalyticsRecommendationsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/payments/webhook': typeof ApiPaymentsWebhookRoute
+  '/api/analytics/export/csv': typeof ApiAnalyticsExportCsvRoute
+  '/api/analytics/recommendations/decide': typeof ApiAnalyticsRecommendationsDecideRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/browse': typeof BrowseRoute
   '/history': typeof HistoryRoute
   '/institution': typeof InstitutionRoute
@@ -124,13 +169,19 @@ export interface FileRoutesByTo {
   '/checkout/$canteenId': typeof CheckoutCanteenIdRoute
   '/menu/$canteenId': typeof MenuCanteenIdRoute
   '/track/$orderId': typeof TrackOrderIdRoute
+  '/api/analytics/context': typeof ApiAnalyticsContextRoute
+  '/api/analytics/overview': typeof ApiAnalyticsOverviewRoute
+  '/api/analytics/recommendations': typeof ApiAnalyticsRecommendationsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/payments/webhook': typeof ApiPaymentsWebhookRoute
+  '/api/analytics/export/csv': typeof ApiAnalyticsExportCsvRoute
+  '/api/analytics/recommendations/decide': typeof ApiAnalyticsRecommendationsDecideRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/analytics': typeof AnalyticsRoute
   '/browse': typeof BrowseRoute
   '/history': typeof HistoryRoute
   '/institution': typeof InstitutionRoute
@@ -141,14 +192,20 @@ export interface FileRoutesById {
   '/checkout/$canteenId': typeof CheckoutCanteenIdRoute
   '/menu/$canteenId': typeof MenuCanteenIdRoute
   '/track/$orderId': typeof TrackOrderIdRoute
+  '/api/analytics/context': typeof ApiAnalyticsContextRoute
+  '/api/analytics/overview': typeof ApiAnalyticsOverviewRoute
+  '/api/analytics/recommendations': typeof ApiAnalyticsRecommendationsRouteWithChildren
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/payments/webhook': typeof ApiPaymentsWebhookRoute
+  '/api/analytics/export/csv': typeof ApiAnalyticsExportCsvRoute
+  '/api/analytics/recommendations/decide': typeof ApiAnalyticsRecommendationsDecideRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin'
+    | '/analytics'
     | '/browse'
     | '/history'
     | '/institution'
@@ -159,12 +216,18 @@ export interface FileRouteTypes {
     | '/checkout/$canteenId'
     | '/menu/$canteenId'
     | '/track/$orderId'
+    | '/api/analytics/context'
+    | '/api/analytics/overview'
+    | '/api/analytics/recommendations'
     | '/api/auth/$'
     | '/api/payments/webhook'
+    | '/api/analytics/export/csv'
+    | '/api/analytics/recommendations/decide'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
+    | '/analytics'
     | '/browse'
     | '/history'
     | '/institution'
@@ -175,12 +238,18 @@ export interface FileRouteTypes {
     | '/checkout/$canteenId'
     | '/menu/$canteenId'
     | '/track/$orderId'
+    | '/api/analytics/context'
+    | '/api/analytics/overview'
+    | '/api/analytics/recommendations'
     | '/api/auth/$'
     | '/api/payments/webhook'
+    | '/api/analytics/export/csv'
+    | '/api/analytics/recommendations/decide'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/analytics'
     | '/browse'
     | '/history'
     | '/institution'
@@ -191,13 +260,19 @@ export interface FileRouteTypes {
     | '/checkout/$canteenId'
     | '/menu/$canteenId'
     | '/track/$orderId'
+    | '/api/analytics/context'
+    | '/api/analytics/overview'
+    | '/api/analytics/recommendations'
     | '/api/auth/$'
     | '/api/payments/webhook'
+    | '/api/analytics/export/csv'
+    | '/api/analytics/recommendations/decide'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AnalyticsRoute: typeof AnalyticsRoute
   BrowseRoute: typeof BrowseRoute
   HistoryRoute: typeof HistoryRoute
   InstitutionRoute: typeof InstitutionRoute
@@ -208,8 +283,12 @@ export interface RootRouteChildren {
   CheckoutCanteenIdRoute: typeof CheckoutCanteenIdRoute
   MenuCanteenIdRoute: typeof MenuCanteenIdRoute
   TrackOrderIdRoute: typeof TrackOrderIdRoute
+  ApiAnalyticsContextRoute: typeof ApiAnalyticsContextRoute
+  ApiAnalyticsOverviewRoute: typeof ApiAnalyticsOverviewRoute
+  ApiAnalyticsRecommendationsRoute: typeof ApiAnalyticsRecommendationsRouteWithChildren
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiPaymentsWebhookRoute: typeof ApiPaymentsWebhookRoute
+  ApiAnalyticsExportCsvRoute: typeof ApiAnalyticsExportCsvRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -226,6 +305,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/browse': {
@@ -298,6 +384,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrackOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/analytics/context': {
+      id: '/api/analytics/context'
+      path: '/api/analytics/context'
+      fullPath: '/api/analytics/context'
+      preLoaderRoute: typeof ApiAnalyticsContextRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/analytics/overview': {
+      id: '/api/analytics/overview'
+      path: '/api/analytics/overview'
+      fullPath: '/api/analytics/overview'
+      preLoaderRoute: typeof ApiAnalyticsOverviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/analytics/recommendations': {
+      id: '/api/analytics/recommendations'
+      path: '/api/analytics/recommendations'
+      fullPath: '/api/analytics/recommendations'
+      preLoaderRoute: typeof ApiAnalyticsRecommendationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -312,12 +419,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPaymentsWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/analytics/export/csv': {
+      id: '/api/analytics/export/csv'
+      path: '/api/analytics/export/csv'
+      fullPath: '/api/analytics/export/csv'
+      preLoaderRoute: typeof ApiAnalyticsExportCsvRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/analytics/recommendations/decide': {
+      id: '/api/analytics/recommendations/decide'
+      path: '/decide'
+      fullPath: '/api/analytics/recommendations/decide'
+      preLoaderRoute: typeof ApiAnalyticsRecommendationsDecideRouteImport
+      parentRoute: typeof ApiAnalyticsRecommendationsRoute
+    }
   }
 }
+
+interface ApiAnalyticsRecommendationsRouteChildren {
+  ApiAnalyticsRecommendationsDecideRoute: typeof ApiAnalyticsRecommendationsDecideRoute
+}
+
+const ApiAnalyticsRecommendationsRouteChildren: ApiAnalyticsRecommendationsRouteChildren =
+  {
+    ApiAnalyticsRecommendationsDecideRoute:
+      ApiAnalyticsRecommendationsDecideRoute,
+  }
+
+const ApiAnalyticsRecommendationsRouteWithChildren =
+  ApiAnalyticsRecommendationsRoute._addFileChildren(
+    ApiAnalyticsRecommendationsRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AnalyticsRoute: AnalyticsRoute,
   BrowseRoute: BrowseRoute,
   HistoryRoute: HistoryRoute,
   InstitutionRoute: InstitutionRoute,
@@ -328,8 +465,13 @@ const rootRouteChildren: RootRouteChildren = {
   CheckoutCanteenIdRoute: CheckoutCanteenIdRoute,
   MenuCanteenIdRoute: MenuCanteenIdRoute,
   TrackOrderIdRoute: TrackOrderIdRoute,
+  ApiAnalyticsContextRoute: ApiAnalyticsContextRoute,
+  ApiAnalyticsOverviewRoute: ApiAnalyticsOverviewRoute,
+  ApiAnalyticsRecommendationsRoute:
+    ApiAnalyticsRecommendationsRouteWithChildren,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiPaymentsWebhookRoute: ApiPaymentsWebhookRoute,
+  ApiAnalyticsExportCsvRoute: ApiAnalyticsExportCsvRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

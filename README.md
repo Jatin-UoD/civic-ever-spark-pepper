@@ -126,6 +126,10 @@ Canteen admins can request a 14-day snapshot of paid item sales, including quant
 
 Canteen admins can set two demand/price tiers (default: 30% more sales → 5% higher price; 50% → 10%). The server compares paid sales over the latest 60 minutes with the same 60-minute period on the previous four weeks. A peak creates an in-app admin notification and a 10-minute review window; manually changing that item's base price cancels the pending adjustment and pauses automation for that item until demand cools. If unchanged, the configured increase is applied automatically, capped at 20%. When demand falls, the automatic increase is reduced or removed. Prices are calculated on the server for both menus and checkout, while existing order totals remain unchanged. A zero historical baseline does not trigger an increase. The feature is demand-based, not cost-based, so it does not guarantee higher profit.
 
+### Canteen Analytics
+
+The `/analytics` dashboard reports paid-order KPIs, item/category performance, IST sales trends and peaks, observed co-purchases, and deterministic review/promotion suggestions. It uses no AI calls, and recommendation decisions never modify menu items or prices. See [docs/ANALYTICS.md](docs/ANALYTICS.md) for calculations, API access, and setup.
+
 ---
 
 ## Project Structure (high level)

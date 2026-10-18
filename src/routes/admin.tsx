@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AnalyticsPanel } from "@/components/analytics-panel";
 import { DemandPricingPanel } from "@/components/demand-pricing-panel";
-import { SalesInsightsPanel } from "@/components/sales-insights-panel";
 import { DemoBanner, RequireUser, Shell, errMsg, inr, useMe } from "@/components/canteen-ui";
 import { createItem, getMenu, grantRole, listDirectory, listStaff, setItemAvailability, updateItem } from "@/lib/canteen/api";
 import { canOperateCanteen, type Availability } from "@/lib/canteen/domain";
@@ -93,7 +92,7 @@ function AdminBody() {
           <div className="space-y-4">
             {activeId ? <AnalyticsPanel canteenId={activeId} /> : null}
             {activeId ? <DemandPricingPanel key={`pricing-${activeId}`} canteenId={activeId} /> : null}
-            {activeId ? <SalesInsightsPanel key={activeId} canteenId={activeId} /> : null}
+            {activeId ? <a href={`/analytics?canteenId=${encodeURIComponent(activeId)}`} className="block rounded-2xl border border-line bg-cream p-3 text-sm font-semibold">Open full Canteen Analytics →</a> : null}
             <section className="rounded-3xl border border-line bg-foam p-4">
               <h2 className="font-display text-2xl font-semibold">Staff</h2>
               <ul className="mt-2 space-y-1 text-sm">

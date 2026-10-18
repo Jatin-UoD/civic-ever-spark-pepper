@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { demandGrowthPercent, demandPriceIncreasePercent, rankSalesItems } from "../../../canteen-analytics.js";
+import { rankSalesItems } from "../../../canteen-analytics.js";
+import {
+  adjustedBasePricePaise,
+  demandGrowthPercent,
+  demandPriceIncreasePercent,
+} from "../canteen-demand-pricing.js";
 
 import {
   CanteenError,
@@ -566,7 +571,7 @@ async function priceLine(sql: Sql, canteenId: string, line: CheckoutLine, lock: 
     });
   }
   const increasePercent = demandPrice ? int(demandPrice.applied_price_increase_percent) : 0;
-  const effectiveBasePrice = basePrice == null ? null : Math.round((basePrice * (100 + increasePercent)) / 100);
+  const effectiveBasePrice = basePrice == null ? null : adjustedBasePricePaise(basePrice, increasePercent);
   const unit = effectiveBasePrice == null ? 0 : unitPaise(effectiveBasePrice, int(item.discount_paise), delta, addonSum);
   if (basePrice != null && line.clientUnitPaise !== unit) {
     base.problems.push({
@@ -1311,10 +1316,9 @@ export async function getMenu(sql: Sql, actor: Actor, canteenId: string) {
       listPricePaise: intOrNull(item.base_price_paise),
       basePricePaise: intOrNull(item.base_price_paise) == null
         ? null
-        : Math.round(
-            (int(item.base_price_paise) *
-              (100 + int(demandPriceByItem.get(str(item.id))?.applied_price_increase_percent ?? 0))) /
-              100,
+        : adjustedBasePricePaise(
+            int(item.base_price_paise),
+            int(demandPriceByItem.get(str(item.id))?.applied_price_increase_percent ?? 0),
           ),
       discountPaise: int(item.discount_paise),
       demandGrowthPercent: int(demandPriceByItem.get(str(item.id))?.demand_growth_percent ?? 0),

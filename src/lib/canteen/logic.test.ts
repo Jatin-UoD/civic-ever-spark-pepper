@@ -5,11 +5,15 @@ import { PGlite } from "@electric-sql/pglite";
 import {
   buildSalesCandidatePools,
   buildSalesRecommendations,
-  demandGrowthPercent,
-  demandPriceIncreasePercent,
   isValidSalesSelection,
   rankSalesItems,
 } from "../../../canteen-analytics.js";
+import {
+  adjustedBasePricePaise,
+  demandGrowthPercent,
+  demandPriceIncreasePercent,
+  validateDemandPricingSettings,
+} from "../canteen-demand-pricing.js";
 import {
   couponDiscount,
   estimateWait,
@@ -122,7 +126,9 @@ describe("standalone canteen analytics", () => {
     assert.equal(demandPriceIncreasePercent(29, settings), 0);
     assert.equal(demandPriceIncreasePercent(30, settings), 5);
     assert.equal(demandPriceIncreasePercent(50, settings), 10);
-    assert.equal(demandPriceIncreasePercent(500, { ...settings, highPricePercent: 99 }), 20);
+    assert.equal(demandPriceIncreasePercent(500, { ...settings, highPricePercent: 20 }), 20);
+    assert.equal(adjustedBasePricePaise(1001, 5), 1051);
+    assert.throws(() => validateDemandPricingSettings({ ...settings, highDemandPercent: 20 }), /tiers/);
   });
 });
 
@@ -145,7 +151,7 @@ describe("canteen ordering invariants", () => {
   it("boots the demo schema", async () => {
     pg = new PGlite();
     await pg.waitReady;
-    for (const name of ["0001_auth.sql", "0002_canteenx.sql", "0003_seed.sql", "0004_demand_pricing.sql"]) {
+    for (const name of ["0001_auth.sql", "0002_canteenx.sql", "0003_seed.sql", "0004_demand_pricing.sql", "0005_canteen_analytics.sql"]) {
       await pg.exec(readFileSync(new URL(`../../../migrations/${name}`, import.meta.url), "utf8"));
     }
     const items = await pg.query<{ n: number }>("select count(*)::int as n from items");

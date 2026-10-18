@@ -105,22 +105,6 @@ export function isValidSalesSelection(selection, pools) {
   return true;
 }
 
-/** @param {number} currentQuantity @param {number} baselineQuantity */
-export function demandGrowthPercent(currentQuantity, baselineQuantity) {
-  if (!Number.isFinite(currentQuantity) || !Number.isFinite(baselineQuantity) || baselineQuantity <= 0) return 0;
-  return Math.max(0, Math.round(((currentQuantity - baselineQuantity) / baselineQuantity) * 100));
-}
-
-/**
- * @param {number} growthPercent
- * @param {{ moderateDemandPercent: number; moderatePricePercent: number; highDemandPercent: number; highPricePercent: number }} settings
- */
-export function demandPriceIncreasePercent(growthPercent, settings) {
-  if (growthPercent >= settings.highDemandPercent) return Math.min(20, settings.highPricePercent);
-  if (growthPercent >= settings.moderateDemandPercent) return Math.min(20, settings.moderatePricePercent);
-  return 0;
-}
-
 /**
  * @param {SalesSnapshot} snapshot
  * @param {SalesCandidatePools} pools
