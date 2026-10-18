@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --color-cream: #f4efe6;
+  --color-foam: #fffdf8;
+  --color-ink: #1a1612;
+  --color-muted: #6f675e;
+  --color-line: #e6dccb;
+  --color-chili: #c2410c;
+  --color-leaf: #1f6b4a;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    background: var(--color-cream);
+    color: var(--color-ink);
+  }
+  body {
+    min-height: 100vh;
+    font-family: var(--font-sans);
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
+  :focus-visible {
+    outline: 2px solid var(--color-chili);
+    outline-offset: 2px;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.ticket {
+  background:
+    radial-gradient(circle at 0 18px, transparent 10px, var(--color-foam) 11px) left / 16px 100% no-repeat,
+    radial-gradient(circle at 100% 18px, transparent 10px, var(--color-foam) 11px) right / 16px 100% no-repeat;
+  background-color: var(--color-foam);
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .receipt, .receipt * { visibility: visible; }
+  .receipt { position: absolute; inset: 0; background: white; }
+  .no-print { display: none !important; }
+}

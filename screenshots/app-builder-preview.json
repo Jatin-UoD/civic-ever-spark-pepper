@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "CanteenX",
+      "hasCanvas": false,
+      "bodyTextLen": 866,
+      "bodyTextHash": "7d32d3feda5530abaa797ace2805fce2d3a7f2c127c5dc904822eb079c31ea29",
+      "bodyTextPrefix": "CanteenX FAQ Sign in CAMPUS KITCHENS Skip the Queue. Order Ahead",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "CanteenX",
+      "hasCanvas": false,
+      "bodyTextLen": 862,
+      "bodyTextHash": "b24196b7b703fd169a2eae5de2e7a0d0d8202fc454e4b67e40dbddbb69c2d7b7",
+      "bodyTextPrefix": "CanteenX Sign in CAMPUS KITCHENS Skip the Queue. Order Ahead. Ea",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
