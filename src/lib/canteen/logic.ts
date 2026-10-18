@@ -21,6 +21,23 @@ type Row = Record<string, unknown>;
 
 export type CheckoutLine = CartLine & { clientUnitPaise: number };
 
+export type SalesSnapshotItem = {
+  id: string;
+  name: string;
+  categoryName: string;
+  availability: Availability;
+  quantitySold: number;
+  revenuePaise: number;
+  lastOrderedAt: string | null;
+  rank: number | null;
+};
+
+export type SalesSnapshot = {
+  periodDays: 14;
+  items: SalesSnapshotItem[];
+  pairs: { firstItemId: string; secondItemId: string; ordersTogether: number }[];
+};
+
 const ACTIVE = ["PAYMENT_CONFIRMED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP"];
 const NEXT: Record<string, string[]> = {
   PAYMENT_CONFIRMED: ["ACCEPTED", "CANCELLED"],
@@ -1509,6 +1526,81 @@ export async function analytics(sql: Sql, actor: Actor, canteenId: string | null
     avgRating: rating?.rating == null ? null : Math.round(Number(rating.rating) * 10) / 10,
     orders,
     revenuePaise: totals ? int(totals.revenue) : 0,
+  };
+}
+
+export async function salesSnapshot(sql: Sql, actor: Actor, canteenId: string): Promise<SalesSnapshot> {
+  const canteen = await loadCanteen(sql, canteenId, false);
+  assertOperate(actor, canteenId, str(canteen.institution_id), "admin");
+
+  const rows = await sql.query<Row>(
+    `select i.id, i.name, c.name as category_name, i.availability,
+            coalesce(sum(oi.qty), 0)::int as quantity_sold,
+            coalesce(sum(oi.line_paise), 0)::int as revenue_paise,
+            max(o.placed_at)::text as last_ordered_at
+     from items i
+     join categories c on c.id = i.category_id
+     left join order_items oi on oi.item_id = i.id
+     left join orders o on o.id = oi.order_id
+       and o.canteen_id = i.canteen_id
+       and o.payment_status = 'PAID'
+       and o.placed_at >= now() - interval '14 days'
+     where i.canteen_id = $1
+     group by i.id, c.name
+     order by i.name`,
+    [canteenId],
+  );
+  const items = rows.map((row) => ({
+    id: str(row.id),
+    name: str(row.name),
+    categoryName: str(row.category_name),
+    availability: str(row.availability) as Availability,
+    quantitySold: int(row.quantity_sold),
+    revenuePaise: int(row.revenue_paise),
+    lastOrderedAt: row.last_ordered_at == null ? null : str(row.last_ordered_at),
+    rank: null as number | null,
+  }));
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const ranked = [...items]
+    .filter((item) => item.quantitySold > 0)
+    .sort((a, b) =>
+      b.quantitySold - a.quantitySold ||
+      b.revenuePaise - a.revenuePaise ||
+      a.name.localeCompare(b.name),
+    );
+  ranked.forEach((item, index) => {
+    const snapshotItem = byId.get(item.id);
+    if (snapshotItem) snapshotItem.rank = index + 1;
+  });
+
+  const pairs = await sql.query<Row>(
+    `select first_line.item_id as first_item_id,
+            second_line.item_id as second_item_id,
+            count(distinct o.id)::int as orders_together
+     from order_items first_line
+     join order_items second_line
+       on second_line.order_id = first_line.order_id
+       and second_line.item_id > first_line.item_id
+     join orders o on o.id = first_line.order_id
+     join items first_item on first_item.id = first_line.item_id and first_item.canteen_id = o.canteen_id
+     join items second_item on second_item.id = second_line.item_id and second_item.canteen_id = o.canteen_id
+     where o.canteen_id = $1
+       and o.payment_status = 'PAID'
+       and o.placed_at >= now() - interval '14 days'
+     group by first_line.item_id, second_line.item_id
+     order by orders_together desc
+     limit 50`,
+    [canteenId],
+  );
+
+  return {
+    periodDays: 14,
+    items,
+    pairs: pairs.map((row) => ({
+      firstItemId: str(row.first_item_id),
+      secondItemId: str(row.second_item_id),
+      ordersTogether: int(row.orders_together),
+    })),
   };
 }
 

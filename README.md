@@ -34,6 +34,7 @@ The API key stays on the server. It never reaches the browser.
 - Staff queue + order accept / reject flow
 - Role-based access (Customer, Staff, Canteen Admin, Institution Admin, Super Admin)
 - **Ask the counter** powered by **NVIDIA Nemotron on Nebius Token Factory**
+- **Admin sales insights** for 14-day item demand, top sellers, and combo ideas
 - Demo mode payments (optional Razorpay support)
 
 ---
@@ -115,6 +116,10 @@ App runs at `http://localhost:8080`
 6. Reply is shown instantly. If the key is missing, the UI clearly says Nebius is not connected (no hallucinated answers).
 
 Source: `src/lib/canteen/nemotron.server.ts`
+
+### Admin sales insights
+
+Canteen admins can request a 14-day snapshot of paid item sales, including quantity, revenue, last order time, and observed co-purchases. The server verifies canteen access and calculates these figures before Nemotron selects review candidates, top sellers to feature, and combo ideas. Low-sales items are review candidates only; no menu item is automatically discontinued or changed.
 
 ---
 

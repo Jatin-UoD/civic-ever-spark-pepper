@@ -19,6 +19,7 @@ import {
   getOrder,
   placeOrder,
   pickupOrder,
+  salesSnapshot,
   saveCart,
   setCanteenStatus,
   setItemAvailability,
@@ -80,6 +81,28 @@ describe("canteen ordering invariants", () => {
     }
     const items = await pg.query<{ n: number }>("select count(*)::int as n from items");
     assert.ok(Number(items.rows[0]?.n) > 40);
+  });
+
+  it("builds a 14-day paid-sales snapshot and restricts it to canteen admins", async () => {
+    const institutionAdmin = await tx((sql) => actorFrom(sql, "user_demo_institution"));
+    const customer = await tx((sql) => actorFrom(sql, "user_demo_customer"));
+    const snapshot = await tx((sql) => salesSnapshot(sql, institutionAdmin, "canteen_central"));
+    const sandwichItem = snapshot.items.find((item) => item.id === "itm_veg_sandwich");
+
+    assert.equal(snapshot.periodDays, 14);
+    assert.ok(snapshot.items.length > 40);
+    assert.equal(sandwichItem?.quantitySold, 2);
+    assert.equal(sandwichItem?.revenuePaise, 6000);
+    assert.notEqual(sandwichItem?.lastOrderedAt, null);
+    assert.ok(sandwichItem?.rank);
+    await assert.rejects(
+      () => tx((sql) => salesSnapshot(sql, customer, "canteen_central")),
+      /FORBIDDEN/,
+    );
+    await assert.rejects(
+      () => tx((sql) => salesSnapshot(sql, institutionAdmin, "canteen_night")),
+      /FORBIDDEN/,
+    );
   });
 
   it("rejects an unavailable item from the cart and the order API, then allows it again", async () => {
