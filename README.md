@@ -35,6 +35,7 @@ The API key stays on the server. It never reaches the browser.
 - Role-based access (Customer, Staff, Canteen Admin, Institution Admin, Super Admin)
 - **Ask the counter** powered by **NVIDIA Nemotron on Nebius Token Factory**
 - **Admin sales insights** for 14-day item demand, top sellers, and combo ideas
+- **Demand-based pricing** with admin-configurable sales thresholds, peak alerts, and delayed automatic price adjustments
 - Demo mode payments (optional Razorpay support)
 
 ---
@@ -120,6 +121,10 @@ Source: `src/lib/canteen/nemotron.server.ts`
 ### Admin sales insights
 
 Canteen admins can request a 14-day snapshot of paid item sales, including quantity, revenue, last order time, and observed co-purchases. The server verifies canteen access and calculates these figures before Nemotron selects review candidates, top sellers to feature, and combo ideas. The root `canteen-analytics.js` module supplies the shared ranking, candidate-selection, and recommendation-validation logic used by the server. Low-sales items are review candidates only; no menu item is automatically discontinued or changed.
+
+### Demand-based pricing
+
+Canteen admins can set two demand/price tiers (default: 30% more sales → 5% higher price; 50% → 10%). The server compares paid sales over the latest 60 minutes with the same 60-minute period on the previous four weeks. A peak creates an in-app admin notification and a 10-minute review window; manually changing that item's base price cancels the pending adjustment and pauses automation for that item until demand cools. If unchanged, the configured increase is applied automatically, capped at 20%. When demand falls, the automatic increase is reduced or removed. Prices are calculated on the server for both menus and checkout, while existing order totals remain unchanged. A zero historical baseline does not trigger an increase. The feature is demand-based, not cost-based, so it does not guarantee higher profit.
 
 ---
 

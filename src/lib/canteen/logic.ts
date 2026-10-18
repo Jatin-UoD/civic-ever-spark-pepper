@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { rankSalesItems } from "../../../canteen-analytics.js";
+import { demandGrowthPercent, demandPriceIncreasePercent, rankSalesItems } from "../../../canteen-analytics.js";
 
 import {
   CanteenError,
@@ -38,6 +38,16 @@ export type SalesSnapshot = {
   items: SalesSnapshotItem[];
   pairs: { firstItemId: string; secondItemId: string; ordersTogether: number }[];
 };
+
+export type DemandPricingSettings = {
+  moderateDemandPercent: number;
+  moderatePricePercent: number;
+  highDemandPercent: number;
+  highPricePercent: number;
+};
+
+const DEMAND_PRICING_INTERVAL_MS = 60_000;
+const DEMAND_PRICING_REVIEW_MS = 10 * 60_000;
 
 const ACTIVE = ["PAYMENT_CONFIRMED", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP"];
 const NEXT: Record<string, string[]> = {
@@ -155,6 +165,185 @@ async function notifyStaff(sql: Sql, canteenId: string, orderId: string, title: 
   );
   for (const s of staff) {
     await notify(sql, str(s.user_id), orderId, "QUEUE", title, body, `${dedupe}:${str(s.user_id)}`);
+  }
+}
+
+async function ensureDemandPricingSettings(sql: Sql, canteenId: string) {
+  await sql.query("insert into demand_pricing_settings (canteen_id) values ($1) on conflict (canteen_id) do nothing", [
+    canteenId,
+  ]);
+}
+
+function demandSettings(row: Row): DemandPricingSettings {
+  return {
+    moderateDemandPercent: int(row.moderate_demand_percent),
+    moderatePricePercent: int(row.moderate_price_percent),
+    highDemandPercent: int(row.high_demand_percent),
+    highPricePercent: int(row.high_price_percent),
+  };
+}
+
+export async function demandPricingDue(sql: Sql, canteenId: string): Promise<boolean> {
+  const row = await one(sql, "select last_evaluated_at from demand_pricing_settings where canteen_id = $1", [canteenId]);
+  if (!row || row.last_evaluated_at == null) return true;
+  const lastEvaluatedAt = new Date(str(row.last_evaluated_at)).getTime();
+  return !Number.isFinite(lastEvaluatedAt) || Date.now() - lastEvaluatedAt >= DEMAND_PRICING_INTERVAL_MS;
+}
+
+export async function runDemandPricing(sql: Sql, canteenId: string) {
+  await ensureDemandPricingSettings(sql, canteenId);
+  const lease = await one(
+    sql,
+    `update demand_pricing_settings set last_evaluated_at = now()
+     where canteen_id = $1
+       and (last_evaluated_at is null or last_evaluated_at < now() - interval '1 minute')
+     returning *`,
+    [canteenId],
+  );
+  if (!lease) return;
+  const settings = demandSettings(lease);
+  const rows = await sql.query<Row>(
+    `with comparison_hours as (
+       select generate_series(
+         (now() at time zone 'Asia/Kolkata') - interval '28 days',
+         (now() at time zone 'Asia/Kolkata') - interval '7 days',
+         interval '7 days'
+       ) as start_at
+     ),
+     baseline as (
+       select i.id as item_id,
+              coalesce(avg(coalesce(prior.quantity, 0)), 0)::numeric as average_quantity
+       from items i
+       cross join comparison_hours h
+       left join lateral (
+         select sum(oi.qty)::numeric as quantity
+         from order_items oi
+         join orders o on o.id = oi.order_id
+         where oi.item_id = i.id
+           and o.canteen_id = i.canteen_id
+           and o.payment_status = 'PAID'
+           and (o.placed_at at time zone 'Asia/Kolkata') >= h.start_at
+           and (o.placed_at at time zone 'Asia/Kolkata') < h.start_at + interval '1 hour'
+       ) prior on true
+       where i.canteen_id = $1
+       group by i.id
+     ),
+     recent as (
+       select oi.item_id, sum(oi.qty)::int as quantity
+       from order_items oi
+       join orders o on o.id = oi.order_id
+       where o.canteen_id = $1
+         and o.payment_status = 'PAID'
+         and o.placed_at >= now() - interval '1 hour'
+       group by oi.item_id
+     )
+     select i.id, i.name, i.availability, i.base_price_paise, b.average_quantity,
+            coalesce(r.quantity, 0)::int as recent_quantity
+     from items i
+     join baseline b on b.item_id = i.id
+     left join recent r on r.item_id = i.id
+     where i.canteen_id = $1 and i.base_price_paise is not null`,
+    [canteenId],
+  );
+  const canteen = await loadCanteen(sql, canteenId, false);
+  const institutionId = str(canteen.institution_id);
+  for (const row of rows) {
+    const priorState = await one(sql, "select * from item_demand_prices where item_id = $1 for update", [row.id]);
+    const averageQuantity = Number(row.average_quantity);
+    if (!Number.isFinite(averageQuantity)) throw new CanteenError("DATA", "Invalid demand baseline in the database.");
+    const growth = demandGrowthPercent(int(row.recent_quantity), averageQuantity);
+    const target = str(row.availability) === "AVAILABLE" ? demandPriceIncreasePercent(growth, settings) : 0;
+    const applied = priorState ? int(priorState.applied_price_increase_percent) : 0;
+    const pending = intOrNull(priorState?.pending_price_increase_percent);
+    const pendingAt = priorState?.pending_since == null ? null : new Date(str(priorState.pending_since)).getTime();
+
+    if (priorState && bool(priorState.admin_override) && target > 0) {
+      await sql.query("update item_demand_prices set demand_growth_percent=$2, updated_at=now() where item_id=$1", [
+        row.id,
+        growth,
+      ]);
+      continue;
+    }
+
+    if (target > applied) {
+      if (pending !== target || pendingAt == null) {
+        await sql.query(
+          `insert into item_demand_prices
+             (item_id, canteen_id, demand_growth_percent, applied_price_increase_percent, pending_price_increase_percent, pending_since)
+           values ($1,$2,$3,$4,$5,now())
+           on conflict (item_id) do update set
+             demand_growth_percent = excluded.demand_growth_percent,
+             pending_price_increase_percent = excluded.pending_price_increase_percent,
+             pending_since = now(),
+             updated_at = now()`,
+          [row.id, canteenId, growth, applied, target],
+        );
+        const recipients = await sql.query<Row>(
+          `select user_id from memberships
+           where active = true and (
+             (role = 'CANTEEN_ADMIN' and canteen_id = $1) or
+             (role = 'INSTITUTION_ADMIN' and institution_id = $2) or
+             role = 'SUPER_ADMIN'
+           )`,
+          [canteenId, institutionId],
+        );
+        const dedupe = `demand:${str(row.id)}:${target}:${Math.floor(Date.now() / DEMAND_PRICING_INTERVAL_MS)}`;
+        for (const recipient of recipients) {
+          await notify(
+            sql,
+            str(recipient.user_id),
+            null,
+            "DEMAND_PRICING",
+            `Peak demand: ${str(row.name)}`,
+            `Paid sales are ${growth}% above the average for this hour across the previous four weeks. The price will rise ${target}% in 10 minutes unless you manually change this item's price.`,
+            `${dedupe}:${str(recipient.user_id)}`,
+          );
+        }
+        continue;
+      }
+      if (pendingAt != null && Date.now() - pendingAt < DEMAND_PRICING_REVIEW_MS) {
+        await sql.query("update item_demand_prices set demand_growth_percent=$2, updated_at=now() where item_id=$1", [
+          row.id,
+          growth,
+        ]);
+        continue;
+      }
+      await sql.query(
+        `update item_demand_prices
+         set demand_growth_percent=$2, applied_price_increase_percent=$3,
+             pending_price_increase_percent=null, pending_since=null, updated_at=now()
+         where item_id=$1`,
+        [row.id, growth, target],
+      );
+      await bump(sql, canteenId);
+      await audit(sql, "demand-pricing", institutionId, "DEMAND_PRICE_AUTO", "item", str(row.id), {
+        growthPercent: growth,
+        increasePercent: target,
+        oldIncreasePercent: applied,
+      });
+      continue;
+    }
+
+    const changed = target !== applied;
+    await sql.query(
+      `insert into item_demand_prices
+         (item_id, canteen_id, demand_growth_percent, applied_price_increase_percent)
+       values ($1,$2,$3,$4)
+       on conflict (item_id) do update set
+         demand_growth_percent = excluded.demand_growth_percent,
+         applied_price_increase_percent = excluded.applied_price_increase_percent,
+         pending_price_increase_percent = null, pending_since = null,
+         admin_override = false, updated_at = now()`,
+      [row.id, canteenId, growth, target],
+    );
+    if (changed) {
+      await bump(sql, canteenId);
+      await audit(sql, "demand-pricing", institutionId, "DEMAND_PRICE_AUTO", "item", str(row.id), {
+        growthPercent: growth,
+        increasePercent: target,
+        oldIncreasePercent: applied,
+      });
+    }
   }
 }
 
@@ -304,6 +493,11 @@ async function priceLine(sql: Sql, canteenId: string, line: CheckoutLine, lock: 
   base.diet = str(item.diet);
   base.availability = str(item.availability);
   base.itemId = str(item.id);
+  const demandPrice = await one(
+    sql,
+    `select applied_price_increase_percent from item_demand_prices where item_id = $1${lock ? " for update" : ""}`,
+    [item.id],
+  );
 
   const variants = await sql.query<Row>("select * from variants where item_id = $1 order by sort, name", [item.id]);
   let delta = 0;
@@ -371,7 +565,9 @@ async function priceLine(sql: Sql, canteenId: string, line: CheckoutLine, lock: 
       hard: false,
     });
   }
-  const unit = basePrice == null ? 0 : unitPaise(basePrice, int(item.discount_paise), delta, addonSum);
+  const increasePercent = demandPrice ? int(demandPrice.applied_price_increase_percent) : 0;
+  const effectiveBasePrice = basePrice == null ? null : Math.round((basePrice * (100 + increasePercent)) / 100);
+  const unit = effectiveBasePrice == null ? 0 : unitPaise(effectiveBasePrice, int(item.discount_paise), delta, addonSum);
   if (basePrice != null && line.clientUnitPaise !== unit) {
     base.problems.push({
       code: "PRICE_MISMATCH",
@@ -935,6 +1131,7 @@ export async function settlePayment(
     `${orderId}:paid`,
   );
   await notifyStaff(sql, str(order.canteen_id), orderId, `New paid order ${str(order.token)}`, "Accept it when the counter is free.", `${orderId}:new`);
+  await runDemandPricing(sql, str(order.canteen_id));
   const fresh = await one(sql, "select * from orders where id = $1", [orderId]);
   return { ...publicOrder(fresh!), idempotent: false, blocked: false as const };
 }
@@ -1063,6 +1260,11 @@ export async function getMenu(sql: Sql, actor: Actor, canteenId: string) {
     "select * from items where canteen_id = $1 order by name",
     [canteenId],
   );
+  const demandPrices = await sql.query<Row>(
+    "select item_id, demand_growth_percent, applied_price_increase_percent from item_demand_prices where canteen_id = $1",
+    [canteenId],
+  );
+  const demandPriceByItem = new Map(demandPrices.map((price) => [str(price.item_id), price]));
   const variants = await sql.query<Row>(
     `select v.* from variants v join items i on i.id = v.item_id where i.canteen_id = $1 order by v.sort`,
     [canteenId],
@@ -1106,8 +1308,17 @@ export async function getMenu(sql: Sql, actor: Actor, canteenId: string) {
       name: str(item.name),
       description: str(item.description),
       imageUrl: item.image_url == null ? null : str(item.image_url),
-      basePricePaise: intOrNull(item.base_price_paise),
+      listPricePaise: intOrNull(item.base_price_paise),
+      basePricePaise: intOrNull(item.base_price_paise) == null
+        ? null
+        : Math.round(
+            (int(item.base_price_paise) *
+              (100 + int(demandPriceByItem.get(str(item.id))?.applied_price_increase_percent ?? 0))) /
+              100,
+          ),
       discountPaise: int(item.discount_paise),
+      demandGrowthPercent: int(demandPriceByItem.get(str(item.id))?.demand_growth_percent ?? 0),
+      dynamicPriceIncreasePercent: int(demandPriceByItem.get(str(item.id))?.applied_price_increase_percent ?? 0),
       diet: str(item.diet),
       prepMinutes: int(item.prep_minutes),
       availability: str(item.availability),
@@ -1191,6 +1402,83 @@ export async function getPulse(sql: Sql, canteenId: string) {
     queueStamp: queue ? str(queue.stamp) : "",
     activeOrders: queue ? int(queue.n) : 0,
   };
+}
+
+export async function getDemandPricing(sql: Sql, actor: Actor, canteenId: string) {
+  const canteen = await loadCanteen(sql, canteenId, false);
+  assertOperate(actor, canteenId, str(canteen.institution_id), "admin");
+  await ensureDemandPricingSettings(sql, canteenId);
+  const settings = await one(sql, "select * from demand_pricing_settings where canteen_id = $1", [canteenId]);
+  if (!settings) throw new CanteenError("DATA", "Demand-pricing settings were not created.");
+  const items = await sql.query<Row>(
+    `select i.id, i.name, i.base_price_paise, p.demand_growth_percent, p.applied_price_increase_percent,
+            p.admin_override, p.pending_price_increase_percent, p.pending_since::text as pending_since
+     from item_demand_prices p join items i on i.id = p.item_id
+     where p.canteen_id = $1
+       and (p.demand_growth_percent > 0 or p.applied_price_increase_percent > 0 or p.pending_price_increase_percent is not null)
+     order by p.pending_price_increase_percent desc nulls last, p.demand_growth_percent desc
+     limit 8`,
+    [canteenId],
+  );
+  return {
+    settings: demandSettings(settings),
+    items: items.map((item) => ({
+      id: str(item.id),
+      name: str(item.name),
+      basePricePaise: intOrNull(item.base_price_paise),
+      demandGrowthPercent: int(item.demand_growth_percent),
+      appliedPriceIncreasePercent: int(item.applied_price_increase_percent),
+      adminOverride: bool(item.admin_override),
+      pendingPriceIncreasePercent: intOrNull(item.pending_price_increase_percent),
+      pendingSince: item.pending_since == null ? null : str(item.pending_since),
+    })),
+    reviewWindowMinutes: DEMAND_PRICING_REVIEW_MS / 60_000,
+    maximumIncreasePercent: 20,
+  };
+}
+
+export async function saveDemandPricing(
+  sql: Sql,
+  actor: Actor,
+  canteenId: string,
+  settings: DemandPricingSettings,
+) {
+  const canteen = await loadCanteen(sql, canteenId, false);
+  assertOperate(actor, canteenId, str(canteen.institution_id), "admin");
+  const values = Object.values(settings);
+  if (
+    values.some((value) => !Number.isInteger(value)) ||
+    settings.moderateDemandPercent < 1 ||
+    settings.moderateDemandPercent > 1000 ||
+    settings.highDemandPercent <= settings.moderateDemandPercent ||
+    settings.highDemandPercent > 1000 ||
+    settings.moderatePricePercent < 0 ||
+    settings.moderatePricePercent > 20 ||
+    settings.highPricePercent < settings.moderatePricePercent ||
+    settings.highPricePercent > 20
+  ) {
+    throw new CanteenError("BAD_INPUT", "Use increasing demand tiers and price increases from 0% to 20%.");
+  }
+  await sql.query(
+    `insert into demand_pricing_settings
+       (canteen_id, moderate_demand_percent, moderate_price_percent, high_demand_percent, high_price_percent, updated_at)
+     values ($1,$2,$3,$4,$5,now())
+     on conflict (canteen_id) do update set
+       moderate_demand_percent=excluded.moderate_demand_percent,
+       moderate_price_percent=excluded.moderate_price_percent,
+       high_demand_percent=excluded.high_demand_percent,
+       high_price_percent=excluded.high_price_percent,
+       updated_at=now()`,
+    [
+      canteenId,
+      settings.moderateDemandPercent,
+      settings.moderatePricePercent,
+      settings.highDemandPercent,
+      settings.highPricePercent,
+    ],
+  );
+  await audit(sql, actor.userId, str(canteen.institution_id), "DEMAND_PRICING_SETTINGS", "canteen", canteenId, settings);
+  return getDemandPricing(sql, actor, canteenId);
 }
 
 function canView(actor: Actor, order: Row): boolean {
@@ -1335,6 +1623,7 @@ export async function updateItem(
   const name = (patch.name ?? str(item.name)).trim().slice(0, 80);
   const description = (patch.description ?? str(item.description)).trim().slice(0, 240);
   const price = patch.basePricePaise === undefined ? intOrNull(item.base_price_paise) : patch.basePricePaise;
+  const manualPriceChange = patch.basePricePaise !== undefined && patch.basePricePaise !== intOrNull(item.base_price_paise);
   const discount = patch.discountPaise ?? int(item.discount_paise);
   const prep = patch.prepMinutes ?? int(item.prep_minutes);
   const diet = patch.diet ?? (str(item.diet) as "veg" | "egg" | "nonveg");
@@ -1350,10 +1639,20 @@ export async function updateItem(
      diet=$7, is_veg=$8, availability=$9, updated_at=now() where id=$1`,
     [itemId, name, description, price, discount, prep, diet, diet === "veg", availability],
   );
+  if (manualPriceChange) {
+    await sql.query(
+     `update item_demand_prices
+      set applied_price_increase_percent=0, admin_override=true,
+          pending_price_increase_percent=null, pending_since=null, updated_at=now()
+      where item_id=$1`,
+     [itemId],
+    );
+  }
   await bump(sql, str(canteen.id));
   await audit(sql, actor.userId, str(canteen.institution_id), "ITEM_UPDATE", "item", itemId, {
     price,
     availability,
+    manualPriceChange,
   });
   return { itemId, basePricePaise: price };
 }

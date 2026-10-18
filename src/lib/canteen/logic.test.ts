@@ -5,6 +5,8 @@ import { PGlite } from "@electric-sql/pglite";
 import {
   buildSalesCandidatePools,
   buildSalesRecommendations,
+  demandGrowthPercent,
+  demandPriceIncreasePercent,
   isValidSalesSelection,
   rankSalesItems,
 } from "../../../canteen-analytics.js";
@@ -22,15 +24,21 @@ import {
 import {
   actorFrom,
   applyWebhookEvent,
+  getDemandPricing,
+  getMenu,
   getOrder,
   placeOrder,
   pickupOrder,
+  quoteCart,
+  runDemandPricing,
   salesSnapshot,
   saveCart,
+  saveDemandPricing,
   setCanteenStatus,
   setItemAvailability,
   settlePayment,
   transitionOrder,
+  updateItem,
   type CheckoutLine,
 } from "./logic.ts";
 import { toSql, type Sql } from "./sql.ts";
@@ -100,6 +108,22 @@ describe("standalone canteen analytics", () => {
     assert.equal(recommendations.promote[0]?.rank, 1);
     assert.equal(recommendations.combos[0]?.ordersTogether, 2);
   });
+
+  it("calculates demand growth without dividing by a zero baseline and honors configured tiers", () => {
+    const settings = {
+      moderateDemandPercent: 30,
+      moderatePricePercent: 5,
+      highDemandPercent: 50,
+      highPricePercent: 10,
+    };
+    assert.equal(demandGrowthPercent(0, 0), 0);
+    assert.equal(demandGrowthPercent(3, 0), 0);
+    assert.equal(demandGrowthPercent(13, 10), 30);
+    assert.equal(demandPriceIncreasePercent(29, settings), 0);
+    assert.equal(demandPriceIncreasePercent(30, settings), 5);
+    assert.equal(demandPriceIncreasePercent(50, settings), 10);
+    assert.equal(demandPriceIncreasePercent(500, { ...settings, highPricePercent: 99 }), 20);
+  });
 });
 
 async function sign(raw: string, secret: string) {
@@ -121,7 +145,7 @@ describe("canteen ordering invariants", () => {
   it("boots the demo schema", async () => {
     pg = new PGlite();
     await pg.waitReady;
-    for (const name of ["0001_auth.sql", "0002_canteenx.sql", "0003_seed.sql"]) {
+    for (const name of ["0001_auth.sql", "0002_canteenx.sql", "0003_seed.sql", "0004_demand_pricing.sql"]) {
       await pg.exec(readFileSync(new URL(`../../../migrations/${name}`, import.meta.url), "utf8"));
     }
     const items = await pg.query<{ n: number }>("select count(*)::int as n from items");
@@ -338,6 +362,114 @@ describe("canteen ordering invariants", () => {
     assert.equal("idempotent" in again && again.idempotent, true);
     const rows = await pg.query<{ n: number }>("select count(*)::int as n from payment_events where id = 'evt_hook_1'");
     assert.equal(Number(rows.rows[0]?.n), 1);
+  });
+
+  it("authorizes demand-pricing controls and applies delayed prices consistently to menu and checkout", async () => {
+    const admin = await tx((sql) => actorFrom(sql, "user_demo_institution"));
+    const customer = await tx((sql) => actorFrom(sql, "user_demo_customer"));
+    const defaults = await tx((sql) => getDemandPricing(sql, admin, "canteen_central"));
+    assert.deepEqual(defaults.settings, {
+      moderateDemandPercent: 30,
+      moderatePricePercent: 5,
+      highDemandPercent: 50,
+      highPricePercent: 10,
+    });
+    await assert.rejects(
+      () => tx((sql) => getDemandPricing(sql, customer, "canteen_central")),
+      /FORBIDDEN/,
+    );
+    const customized = await tx((sql) => saveDemandPricing(sql, admin, "canteen_central", {
+      moderateDemandPercent: 35,
+      moderatePricePercent: 6,
+      highDemandPercent: 55,
+      highPricePercent: 12,
+    }));
+    assert.equal(customized.settings.moderateDemandPercent, 35);
+    assert.equal(customized.settings.highPricePercent, 12);
+    await tx((sql) => saveDemandPricing(sql, admin, "canteen_central", defaults.settings));
+    await assert.rejects(
+      () => tx((sql) => saveDemandPricing(sql, admin, "canteen_central", {
+        moderateDemandPercent: 50,
+        moderatePricePercent: 10,
+        highDemandPercent: 30,
+        highPricePercent: 15,
+      })),
+      /BAD_INPUT/,
+    );
+
+    await tx((sql) => sql.query(
+      "update demand_pricing_settings set last_evaluated_at = null where canteen_id = 'canteen_central'",
+    ));
+    await tx((sql) => sql.query(
+      "update orders set placed_at = now() - interval '7 days' + interval '5 minutes' where id = $1",
+      ["ord_hist_1"],
+    ));
+    await tx((sql) => sql.query(
+      `insert into orders (
+         id, token, institution_id, campus_id, canteen_id, institution_name, campus_name, canteen_name,
+         customer_user_id, status, payment_status, subtotal_paise, charges_paise, discount_paise, total_paise,
+         eta_minutes, orders_ahead, idempotency_key, request_hash, pickup_code, placed_at, updated_at
+       )
+       select 'ord_demand_current', 'C9090', institution_id, campus_id, canteen_id, institution_name, campus_name,
+              canteen_name, customer_user_id, 'PICKED_UP', 'PAID', 12000, 0, 0, 12000, 8, 0,
+              'idem-demand-current', 'demand-test', 'CX|ord_demand_current|C9090', now() - interval '30 minutes', now()
+       from orders where id = 'ord_hist_1'`,
+    ));
+    await tx((sql) => sql.query(
+      `insert into order_items (id, order_id, item_id, name, qty, unit_paise, line_paise, prep_minutes)
+       values ('oi_demand_current', 'ord_demand_current', 'itm_veg_sandwich', 'Veg Sandwich', 4, 3000, 12000, 8)`,
+    ));
+
+    await tx((sql) => runDemandPricing(sql, "canteen_central"));
+    const pending = await tx((sql) => getDemandPricing(sql, admin, "canteen_central"));
+    const pendingItem = pending.items.find((item) => item.id === "itm_veg_sandwich");
+    assert.equal(pendingItem?.pendingPriceIncreasePercent, 10);
+    assert.equal(pendingItem?.appliedPriceIncreasePercent, 0);
+    const alerts = await pg.query<{ n: number }>(
+      "select count(*)::int as n from notifications where kind = 'DEMAND_PRICING' and user_id = 'user_demo_institution'",
+    );
+    assert.equal(Number(alerts.rows[0]?.n), 1);
+
+    await tx((sql) => sql.query(
+      "update item_demand_prices set pending_since=now()-interval '11 minutes' where item_id='itm_veg_sandwich'",
+    ));
+    await tx((sql) => sql.query(
+      "update demand_pricing_settings set last_evaluated_at=now()-interval '2 minutes' where canteen_id='canteen_central'",
+    ));
+    await tx((sql) => runDemandPricing(sql, "canteen_central"));
+
+    const menu = await tx((sql) => getMenu(sql, admin, "canteen_central"));
+    const sandwichItem = menu.items.find((item) => item.id === "itm_veg_sandwich");
+    assert.equal(sandwichItem?.basePricePaise, 3300);
+    assert.equal(sandwichItem?.listPricePaise, 3000);
+    assert.equal(sandwichItem?.dynamicPriceIncreasePercent, 10);
+    const quote = await tx((sql) => quoteCart(sql, "canteen_central", [{
+      itemId: "itm_veg_sandwich",
+      qty: 1,
+      addonIds: [],
+      clientUnitPaise: 3300,
+    }], null, false));
+    assert.equal(quote.priced[0]?.unitPaise, 3300);
+    assert.equal(quote.sellable, true);
+
+    await tx((sql) => updateItem(sql, admin, "itm_veg_sandwich", { basePricePaise: 3200 }));
+    const manual = await tx((sql) => getMenu(sql, admin, "canteen_central"));
+    const manuallyPricedItem = manual.items.find((item) => item.id === "itm_veg_sandwich");
+    assert.equal(manuallyPricedItem?.basePricePaise, 3200);
+    assert.equal(manuallyPricedItem?.dynamicPriceIncreasePercent, 0);
+    const manualState = await pg.query<{ pending_price_increase_percent: number | null; admin_override: boolean }>(
+      "select pending_price_increase_percent, admin_override from item_demand_prices where item_id='itm_veg_sandwich'",
+    );
+    assert.equal(manualState.rows[0]?.pending_price_increase_percent, null);
+    assert.equal(manualState.rows[0]?.admin_override, true);
+    await tx((sql) => sql.query(
+      "update demand_pricing_settings set last_evaluated_at=now()-interval '2 minutes' where canteen_id='canteen_central'",
+    ));
+    await tx((sql) => runDemandPricing(sql, "canteen_central"));
+    const afterManualResponse = await tx((sql) => getDemandPricing(sql, admin, "canteen_central"));
+    const afterManualItem = afterManualResponse.items.find((item) => item.id === "itm_veg_sandwich");
+    assert.equal(afterManualItem?.adminOverride, true);
+    assert.equal(afterManualItem?.pendingPriceIncreasePercent, null);
   });
 });
 

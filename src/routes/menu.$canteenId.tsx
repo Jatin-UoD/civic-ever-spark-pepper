@@ -203,6 +203,7 @@ function MenuBody({ canteenId }: { canteenId: string }) {
                       {inr(price)}
                     </>
                   )}
+                  {item.dynamicPriceIncreasePercent > 0 ? <span className="text-chili"> · Peak demand +{item.dynamicPriceIncreasePercent}%</span> : null}
                   <span className="text-muted"> · {item.prepMinutes} min</span>
                   {item.isDemo ? <span className="text-muted"> · Demo</span> : null}
                 </p>

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AnalyticsPanel } from "@/components/analytics-panel";
+import { DemandPricingPanel } from "@/components/demand-pricing-panel";
 import { SalesInsightsPanel } from "@/components/sales-insights-panel";
 import { DemoBanner, RequireUser, Shell, errMsg, inr, useMe } from "@/components/canteen-ui";
 import { createItem, getMenu, grantRole, listDirectory, listStaff, setItemAvailability, updateItem } from "@/lib/canteen/api";
@@ -61,7 +62,7 @@ function AdminBody() {
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-3">
             {(menu.data?.items ?? []).map((item) => (
-              <ItemRow key={item.id} item={item} onSave={(patch) => saved(updateItem({ data: { itemId: item.id, ...patch } }), "Saved")} onToggle={(availability) => saved(setItemAvailability({ data: { itemId: item.id, availability } }), "Availability updated")} />
+              <ItemRow key={`${item.id}-${item.listPricePaise ?? "unset"}`} item={item} onSave={(patch) => saved(updateItem({ data: { itemId: item.id, ...patch } }), "Saved")} onToggle={(availability) => saved(setItemAvailability({ data: { itemId: item.id, availability } }), "Availability updated")} />
             ))}
             <form
               className="rounded-3xl border border-dashed border-line p-4"
@@ -91,6 +92,7 @@ function AdminBody() {
           </div>
           <div className="space-y-4">
             {activeId ? <AnalyticsPanel canteenId={activeId} /> : null}
+            {activeId ? <DemandPricingPanel key={`pricing-${activeId}`} canteenId={activeId} /> : null}
             {activeId ? <SalesInsightsPanel key={activeId} canteenId={activeId} /> : null}
             <section className="rounded-3xl border border-line bg-foam p-4">
               <h2 className="font-display text-2xl font-semibold">Staff</h2>
@@ -120,11 +122,11 @@ function ItemRow({
   onSave,
   onToggle,
 }: {
-  item: { id: string; name: string; description: string; basePricePaise: number | null; discountPaise: number; prepMinutes: number; availability: string };
+  item: { id: string; name: string; description: string; listPricePaise: number | null; basePricePaise: number | null; discountPaise: number; prepMinutes: number; availability: string };
   onSave: (patch: { name: string; description: string; basePricePaise: number; discountPaise: number; prepMinutes: number }) => void;
   onToggle: (availability: Availability) => void;
 }) {
-  const [price, setPrice] = useState(item.basePricePaise == null ? "" : String(item.basePricePaise / 100));
+  const [price, setPrice] = useState(item.listPricePaise == null ? "" : String(item.listPricePaise / 100));
   const [discount, setDiscount] = useState(String(item.discountPaise / 100));
   const [prep, setPrep] = useState(String(item.prepMinutes));
   return (
