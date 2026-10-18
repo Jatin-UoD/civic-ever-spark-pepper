@@ -1,55 +1,146 @@
 # CanteenX
 
-Skip the Queue. Order Ahead. Eat Faster.
+**Skip the Queue. Order Ahead. Eat Faster.**
 
-Multi-tenant canteen ordering for colleges, hostels, offices and food courts. Institutions, campuses and canteens are separate. Staff can turn any item off; customers cannot buy it again until it is on.
+Multi-tenant canteen ordering platform for colleges, hostels, offices and food courts.  
+Built for the **Nebius × NVIDIA Global AI Hackathon**.
 
-## NVIDIA Nemotron on Nebius
+---
 
-The menu has **Ask the counter**. That box calls Nebius Token Factory at `https://api.tokenfactory.nebius.com/v1/chat/completions` with an NVIDIA open model. The key never reaches the browser.
+## Built With (Hackathon Requirements)
 
-Set these on the server only:
+| Requirement | Implementation |
+|-------------|----------------|
+| **Nebius** | Nebius Token Factory (`https://api.tokenfactory.nebius.com/v1/chat/completions`) |
+| **NVIDIA Open Model** | `nvidia/Nemotron-3.5-Lightning` (default) |
+| **Feature** | **"Ask the counter"** – students ask natural language questions about the live menu. Nemotron only suggests dishes that actually exist and are available right now. |
 
-- `NEBIUS_API_KEY` — Token Factory key
-- `NEBIUS_MODEL` — optional, default `nvidia/Nemotron-3.5-Lightning`
+The API key stays on the server. It never reaches the browser.
 
-Without the key the button explains that Nebius is not connected. It does not invent a reply.
+### Feedback on Nebius + NVIDIA (required for submission)
 
-## Demo accounts
+- **What I used them for**: Real-time menu Q&A assistant ("Ask the counter") so students get instant, accurate suggestions without scrolling the full menu.
+- **What worked well**: Token Factory OpenAI-compatible endpoint made integration very simple. Nemotron follows the strict system prompt well (does not invent items or prices).
+- **Onboarding**: From zero to working call was fast once the API key was available. Clear model naming (`nvidia/Nemotron-3.5-Lightning`).
+- **Would I build with them again?**: Yes — especially for campus / internal tools where low latency and controlled generation matter.
 
-Password for every seeded account: `SkipTheQueue1`
+---
+
+## Features
+
+- Multi-tenant (Institutions → Campuses → Canteens)
+- Live menu with availability control (staff can turn items off instantly)
+- Cart, coupons, order tracking
+- Staff queue + order accept / reject flow
+- Role-based access (Customer, Staff, Canteen Admin, Institution Admin, Super Admin)
+- **Ask the counter** powered by **NVIDIA Nemotron on Nebius Token Factory**
+- Demo mode payments (optional Razorpay support)
+
+---
+
+## Demo Accounts
+
+Password for **all** seeded accounts: `SkipTheQueue1`
 
 | Role | Email |
-| --- | --- |
-| Customer | customer@canteenx.dev |
-| Staff (Central Canteen) | staff@canteenx.dev |
-| Canteen admin | canteen@canteenx.dev |
-| Institution admin | institution@canteenx.dev |
-| Super admin | super@canteenx.dev |
-| Staff (Night Mess, other tenant) | night@canteenx.dev |
+|------|-------|
+| Customer | `customer@canteenx.dev` |
+| Staff (Central Canteen) | `staff@canteenx.dev` |
+| Canteen Admin | `canteen@canteenx.dev` |
+| Institution Admin | `institution@canteenx.dev` |
+| Super Admin | `super@canteenx.dev` |
+| Staff (Night Mess – other tenant) | `night@canteenx.dev` |
 
-Demo University → Main Campus → Central Canteen is the full menu. Harbour House Hostel → Night Mess is a second tenant used to prove staff cannot cross over. Amul Ice Creams is an MRP item and stays unsellable until a canteen admin sets a price. Coupon `WELCOME10` is 10% off from ₹100.
+- **Demo University → Main Campus → Central Canteen** has the full menu.
+- **Harbour House Hostel → Night Mess** is a second tenant (used to prove isolation).
+- Coupon: `WELCOME10` → 10% off on orders ≥ ₹100.
 
-## Payments
+---
 
-Demo mode is the default: no card data is collected or stored. Pay / Simulate failure on the order screen settles the payment on the server.
+## Quick Start
 
-Optional gateway (set by the host, never in a committed env file):
+```bash
+# 1. Clone
+git clone https://github.com/Jatin-UoD/civic-ever-spark-pepper.git
+cd civic-ever-spark-pepper
 
-- `RAZORPAY_KEY_ID`
-- `RAZORPAY_KEY_SECRET`
-- `RAZORPAY_WEBHOOK_SECRET`
+# 2. Install
+npm install
 
-Webhook: `POST /api/payments/webhook` with header `x-razorpay-signature` (HMAC-SHA256 of the raw body). Without the secret the route refuses the call. Notes on the Razorpay order include `canteenx_order_id`. Events are idempotent. If an item is turned off before payment or accept, the order is cancelled and a captured webhook is marked refunded instead of being cooked.
+# 3. Environment (create .env)
+# Required for AI feature:
+NEBIUS_API_KEY=your_nebius_token_factory_key
+# Optional:
+NEBIUS_MODEL=nvidia/Nemotron-3.5-Lightning
 
-`DATABASE_URL` is injected in production. The preview uses embedded Postgres and reapplies `migrations/`.
+# 4. Run
+npm run dev
+```
 
-## Live updates
+App runs at `http://localhost:8080`
 
-Menus, carts, the staff queue and tracking poll a small pulse every 2 seconds (catalog version and queue stamp). Neon’s pooled connections do not keep `LISTEN/NOTIFY`, so the app does not depend on it. Availability, price and canteen status are rechecked inside a transaction at checkout, payment and accept.
+### Useful scripts
 
-## Scripts
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server |
+| `npm test` | Run unit + database invariant tests |
+| `npm run build` | Production build + migrations |
+| `npm run typecheck` | TypeScript check |
 
-- `npm run dev` — app
-- `npm test` — unit and database invariant tests (off item, closed canteen, tampered price, duplicate checkout, failed payment, tenant isolation, pickup)
-- `npm run build` — production build and migrations
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEBIUS_API_KEY` | For AI feature | Nebius Token Factory API key |
+| `NEBIUS_MODEL` | No | Defaults to `nvidia/Nemotron-3.5-Lightning` |
+| `DATABASE_URL` | Production | Postgres connection string |
+| `RAZORPAY_KEY_ID` | No | Optional payment gateway |
+| `RAZORPAY_KEY_SECRET` | No | Optional payment gateway |
+| `RAZORPAY_WEBHOOK_SECRET` | No | Optional webhook verification |
+
+> Never commit real keys. `.env` is already in `.gitignore`.
+
+---
+
+## How the AI Feature Works
+
+1. Student opens a canteen menu.
+2. Types a question in **"Ask the counter"** (e.g. "What vegetarian snacks are under ₹50?").
+3. Server builds a fresh catalogue snapshot (only available items).
+4. Calls **Nebius Token Factory** with model **NVIDIA Nemotron**.
+5. Strict system prompt forces the model to answer only from the real menu.
+6. Reply is shown instantly. If the key is missing, the UI clearly says Nebius is not connected (no hallucinated answers).
+
+Source: `src/lib/canteen/nemotron.server.ts`
+
+---
+
+## Project Structure (high level)
+
+```
+src/
+  lib/canteen/          # Domain logic + Nemotron integration
+  routes/               # Pages (menu, cart, staff, admin...)
+  components/
+server/                 # Server middleware
+migrations/             # Database migrations + seed data
+```
+
+---
+
+## License
+
+MIT License – see [LICENSE](LICENSE)
+
+---
+
+## Hackathon Submission Notes
+
+- **Track suggestion**: Best Apps and Agents / Personal AI
+- Public repository: this repo
+- Open source license: MIT
+- NVIDIA model used: `nvidia/Nemotron-3.5-Lightning`
+- Nebius product used: Token Factory
