@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { rankSalesItems } from "../../../canteen-analytics.js";
 
 import {
   CanteenError,
@@ -1550,7 +1551,7 @@ export async function salesSnapshot(sql: Sql, actor: Actor, canteenId: string): 
      order by i.name`,
     [canteenId],
   );
-  const items = rows.map((row) => ({
+  const items = rankSalesItems(rows.map((row) => ({
     id: str(row.id),
     name: str(row.name),
     categoryName: str(row.category_name),
@@ -1558,20 +1559,7 @@ export async function salesSnapshot(sql: Sql, actor: Actor, canteenId: string): 
     quantitySold: int(row.quantity_sold),
     revenuePaise: int(row.revenue_paise),
     lastOrderedAt: row.last_ordered_at == null ? null : str(row.last_ordered_at),
-    rank: null as number | null,
-  }));
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const ranked = [...items]
-    .filter((item) => item.quantitySold > 0)
-    .sort((a, b) =>
-      b.quantitySold - a.quantitySold ||
-      b.revenuePaise - a.revenuePaise ||
-      a.name.localeCompare(b.name),
-    );
-  ranked.forEach((item, index) => {
-    const snapshotItem = byId.get(item.id);
-    if (snapshotItem) snapshotItem.rank = index + 1;
-  });
+  })));
 
   const pairs = await sql.query<Row>(
     `select first_line.item_id as first_item_id,

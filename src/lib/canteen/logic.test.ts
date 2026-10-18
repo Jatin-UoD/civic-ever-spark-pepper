@@ -3,6 +3,12 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import {
+  buildSalesCandidatePools,
+  buildSalesRecommendations,
+  isValidSalesSelection,
+  rankSalesItems,
+} from "../../../canteen-analytics.js";
+import {
   couponDiscount,
   estimateWait,
   friendlyError,
@@ -54,6 +60,45 @@ describe("pricing and access rules", () => {
     const sig = await sign(raw, "topsecret");
     assert.equal(await verifyHmacSha256("topsecret", raw, sig), true);
     assert.equal(await verifyHmacSha256("topsecret", raw + " ", sig), false);
+  });
+});
+
+describe("standalone canteen analytics", () => {
+  const items = rankSalesItems([
+    { id: "tea", name: "Tea", categoryName: "Drinks", availability: "AVAILABLE", quantitySold: 8, revenuePaise: 8000, lastOrderedAt: "2026-10-17" },
+    { id: "snack", name: "Snack", categoryName: "Snacks", availability: "AVAILABLE", quantitySold: 3, revenuePaise: 4500, lastOrderedAt: "2026-10-16" },
+    { id: "quiet", name: "Quiet item", categoryName: "Snacks", availability: "AVAILABLE", quantitySold: 0, revenuePaise: 0, lastOrderedAt: null },
+    { id: "hidden", name: "Hidden item", categoryName: "Snacks", availability: "HIDDEN", quantitySold: 0, revenuePaise: 0, lastOrderedAt: null },
+  ]);
+  const snapshot = {
+    periodDays: 14 as const,
+    items,
+    pairs: [{ firstItemId: "snack", secondItemId: "tea", ordersTogether: 2 }],
+  };
+
+  it("ranks paid sellers and builds recommendations only from eligible sales candidates", () => {
+    assert.equal(items.find((item) => item.id === "tea")?.rank, 1);
+    assert.equal(items.find((item) => item.id === "snack")?.rank, 2);
+    assert.equal(items.find((item) => item.id === "quiet")?.rank, null);
+
+    const candidates = buildSalesCandidatePools(snapshot);
+    assert.deepEqual(candidates.reviewCandidates.map((item) => item.id), ["quiet"]);
+    assert.deepEqual(candidates.comboCandidates, [{ itemIds: ["snack", "tea"], ordersTogether: 2 }]);
+    assert.equal(buildSalesCandidatePools({ ...snapshot, pairs: [] }).comboCandidates.length, 1);
+
+    const selection = {
+      reviewItemIds: ["quiet"],
+      promoteItemIds: ["tea"],
+      comboPairs: [["tea", "snack"] as [string, string]],
+    };
+    assert.equal(isValidSalesSelection(selection, candidates), true);
+    assert.equal(isValidSalesSelection({ ...selection, promoteItemIds: ["hidden"] }, candidates), false);
+    assert.equal(isValidSalesSelection({ ...selection, comboPairs: [["tea", "tea"]] }, candidates), false);
+
+    const recommendations = buildSalesRecommendations(snapshot, candidates, selection);
+    assert.equal(recommendations.review[0]?.reason, "NO_RECENT_SALES");
+    assert.equal(recommendations.promote[0]?.rank, 1);
+    assert.equal(recommendations.combos[0]?.ordersTogether, 2);
   });
 });
 
