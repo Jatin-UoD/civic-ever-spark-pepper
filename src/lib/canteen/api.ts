@@ -56,10 +56,15 @@ export const getMenu = createServerFn({ method: "GET" })
 export const getPulse = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .validator((input: unknown) => z.object({ canteenId: id }).parse(input))
-  .handler(async ({ data, context }) => read(context.userId, async (sql) => {
-    const { getPulse: pulse } = await import("./logic.ts");
-    return pulse(sql, data.canteenId);
-  }));
+  .handler(async ({ data, context }) => {
+    const { demandPricingDue, runDemandPricing } = await import("./logic.ts");
+    const due = await read(context.userId, (sql) => demandPricingDue(sql, data.canteenId));
+    if (due) await write(context.userId, (sql) => runDemandPricing(sql, data.canteenId));
+    return read(context.userId, async (sql) => {
+      const { getPulse: pulse } = await import("./logic.ts");
+      return pulse(sql, data.canteenId);
+    });
+  });
 
 export const getCart = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -299,6 +304,32 @@ export const getAnalytics = createServerFn({ method: "GET" })
     const { analytics } = await import("./logic.ts");
     return analytics(sql, actor, data.canteenId ?? null, data.institutionId ?? null);
   }));
+
+const demandPricingSettings = z.object({
+  moderateDemandPercent: z.number().int().min(1).max(1000),
+  moderatePricePercent: z.number().int().min(0).max(20),
+  highDemandPercent: z.number().int().min(2).max(1000),
+  highPricePercent: z.number().int().min(0).max(20),
+});
+
+export const getDemandPricing = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => z.object({ canteenId: id }).parse(input))
+  .handler(async ({ data, context }) => read(context.userId, async (sql, actor) => {
+    const { getDemandPricing: getSettings } = await import("./logic.ts");
+    return getSettings(sql, actor, data.canteenId);
+  }));
+
+export const saveDemandPricing = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => z.object({ canteenId: id, settings: demandPricingSettings }).parse(input))
+  .handler(async ({ data, context }) => {
+    rateLimit(`demand-pricing:${context.userId}:${data.canteenId}`, 10, 60_000);
+    return write(context.userId, async (sql, actor) => {
+      const { saveDemandPricing: save } = await import("./logic.ts");
+      return save(sql, actor, data.canteenId, data.settings);
+    });
+  });
 
 export const listNotifications = createServerFn({ method: "GET" })
   .middleware([authMiddleware])

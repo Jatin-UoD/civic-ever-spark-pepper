@@ -112,6 +112,9 @@ export function Shell({
       ? [{ to: "/staff", label: "Staff" }]
       : []),
     ...(roles.has("CANTEEN_ADMIN") || roles.has("SUPER_ADMIN") ? [{ to: "/admin", label: "Menu admin" }] : []),
+    ...(roles.has("CANTEEN_ADMIN") || roles.has("INSTITUTION_ADMIN") || roles.has("SUPER_ADMIN")
+      ? [{ to: "/analytics", label: "Analytics" }]
+      : []),
     ...(roles.has("INSTITUTION_ADMIN") || roles.has("SUPER_ADMIN") ? [{ to: "/institution", label: "Campus" }] : []),
     ...(roles.has("SUPER_ADMIN") ? [{ to: "/platform", label: "Platform" }] : []),
   ];
