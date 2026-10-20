@@ -1,10 +1,10 @@
 import { CanteenError } from "./domain.ts";
 
-/** Free NVIDIA NIM endpoint (OpenAI-compatible). Key from https://build.nvidia.com */
-const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+/** Free Groq OpenAI-compatible endpoint. Key from https://console.groq.com */
+const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-/** Default free Nemotron model on NVIDIA build catalog */
-const DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
+/** Fast free model on Groq (change via GROQ_MODEL) */
+const DEFAULT_MODEL = "llama-3.3-70b-versatile";
 
 type MenuSnap = {
   canteen: { name: string; status: string };
@@ -13,10 +13,7 @@ type MenuSnap = {
 };
 
 function resolveApiKey(): string | undefined {
-  const key =
-    process.env.NVIDIA_API_KEY?.trim() ||
-    process.env.NGC_API_KEY?.trim() ||
-    process.env.NVIDIA_NIM_API_KEY?.trim();
+  const key = process.env.GROQ_API_KEY?.trim();
   return key || undefined;
 }
 
@@ -25,10 +22,10 @@ export async function askNemotron(menu: MenuSnap, question: string) {
   if (!key) {
     throw new CanteenError(
       "NO_KEY",
-      "NVIDIA is not connected. Add NVIDIA_API_KEY (free key from build.nvidia.com) on the server, then ask again.",
+      "Groq is not connected. Add GROQ_API_KEY (free key from console.groq.com) on the server, then ask again.",
     );
   }
-  const model = process.env.NVIDIA_MODEL?.trim() || DEFAULT_MODEL;
+  const model = process.env.GROQ_MODEL?.trim() || DEFAULT_MODEL;
   const catalogue = [
     ...menu.items
       .filter((item) => item.availability !== "HIDDEN")
@@ -46,13 +43,13 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     ),
   ].join("\n");
 
-  const response = await fetch(NVIDIA_CHAT_URL, {
+  const response = await fetch(GROQ_CHAT_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(20_000),
     body: JSON.stringify({
       model,
       temperature: 0.3,
@@ -77,8 +74,8 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     throw new CanteenError(
       "NEMOTRON",
       response.status === 401
-        ? "NVIDIA rejected the API key. Get a free key at build.nvidia.com."
-        : `NVIDIA Nemotron did not answer (${response.status}). ${detail.slice(0, 180)}`,
+        ? "Groq rejected the API key. Get a free key at console.groq.com."
+        : `Groq did not answer (${response.status}). ${detail.slice(0, 180)}`,
     );
   }
   const body = (await response.json()) as {
@@ -86,10 +83,10 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     model?: string;
   };
   const answer = body.choices?.[0]?.message?.content?.trim();
-  if (!answer) throw new CanteenError("NEMOTRON", "NVIDIA returned an empty reply.");
+  if (!answer) throw new CanteenError("NEMOTRON", "Groq returned an empty reply.");
   return {
     answer,
     model: body.model || model,
-    provider: "NVIDIA NIM (build.nvidia.com)",
+    provider: "Groq",
   };
 }
