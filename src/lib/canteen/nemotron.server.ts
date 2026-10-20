@@ -1,10 +1,6 @@
 import { CanteenError } from "./domain.ts";
 
-/** Free Groq OpenAI-compatible endpoint. Key from https://console.groq.com */
-const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
-
-/** Fast free model on Groq (change via GROQ_MODEL) */
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+const DEFAULT_MODEL = "nvidia/Nemotron-3.5-Lightning";
 
 type MenuSnap = {
   canteen: { name: string; status: string };
@@ -12,38 +8,27 @@ type MenuSnap = {
   combos: { name: string; availability: string; pricePaise: number }[];
 };
 
-function resolveApiKey(): string | undefined {
-  const key = process.env.GROQ_API_KEY?.trim();
-  return key || undefined;
-}
-
 export async function askNemotron(menu: MenuSnap, question: string) {
-  const key = resolveApiKey();
+  const key = process.env.NEBIUS_API_KEY?.trim();
   if (!key) {
     throw new CanteenError(
       "NO_KEY",
-      "Groq is not connected. Add GROQ_API_KEY (free key from console.groq.com) on the server, then ask again.",
+      "Nebius is not connected. Add NEBIUS_API_KEY on the server, then ask again.",
     );
   }
-  const model = process.env.GROQ_MODEL?.trim() || DEFAULT_MODEL;
+  const model = process.env.NEBIUS_MODEL?.trim() || DEFAULT_MODEL;
   const catalogue = [
     ...menu.items
       .filter((item) => item.availability !== "HIDDEN")
       .slice(0, 60)
       .map((item) => {
-        const price =
-          item.basePricePaise == null
-            ? "price not set"
-            : `₹${Math.round((item.basePricePaise - item.discountPaise) / 100)}`;
+        const price = item.basePricePaise == null ? "price not set" : `₹${Math.round((item.basePricePaise - item.discountPaise) / 100)}`;
         return `${item.name} | ${item.diet} | ${item.availability} | ${price}`;
       }),
-    ...menu.combos.map(
-      (combo) =>
-        `${combo.name} | combo | ${combo.availability} | ₹${Math.round(combo.pricePaise / 100)}`,
-    ),
+    ...menu.combos.map((combo) => `${combo.name} | combo | ${combo.availability} | ₹${Math.round(combo.pricePaise / 100)}`),
   ].join("\n");
 
-  const response = await fetch(GROQ_CHAT_URL, {
+  const response = await fetch("https://api.tokenfactory.nebius.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
@@ -54,7 +39,6 @@ export async function askNemotron(menu: MenuSnap, question: string) {
       model,
       temperature: 0.3,
       max_tokens: 220,
-      stream: false,
       messages: [
         {
           role: "system",
@@ -74,8 +58,8 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     throw new CanteenError(
       "NEMOTRON",
       response.status === 401
-        ? "Groq rejected the API key. Get a free key at console.groq.com."
-        : `Groq did not answer (${response.status}). ${detail.slice(0, 180)}`,
+        ? "Nebius rejected the API key."
+        : `Nemotron did not answer (${response.status}). ${detail.slice(0, 180)}`,
     );
   }
   const body = (await response.json()) as {
@@ -83,10 +67,10 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     model?: string;
   };
   const answer = body.choices?.[0]?.message?.content?.trim();
-  if (!answer) throw new CanteenError("NEMOTRON", "Groq returned an empty reply.");
+  if (!answer) throw new CanteenError("NEMOTRON", "Nemotron returned an empty reply.");
   return {
     answer,
     model: body.model || model,
-    provider: "Groq",
+    provider: "Nebius Token Factory",
   };
 }

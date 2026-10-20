@@ -2,7 +2,8 @@
 
 **Skip the Queue. Order Ahead. Eat Faster.**
 
-Multi-tenant canteen ordering platform for colleges, hostels, offices and food courts.
+Multi-tenant canteen ordering platform for colleges, hostels, offices and food courts.  
+Built for the **Nebius × NVIDIA Global AI Hackathon**.
 
 ---
 
@@ -10,14 +11,12 @@ Multi-tenant canteen ordering platform for colleges, hostels, offices and food c
 
 | Item | Value |
 |------|--------|
-| **Provider** | [Groq](https://console.groq.com) free tier |
-| **API** | `https://api.groq.com/openai/v1/chat/completions` |
-| **Default model** | `llama-3.3-70b-versatile` |
+| **Provider** | [Nebius Token Factory](https://tokenfactory.nebius.com/) |
+| **API** | `https://api.tokenfactory.nebius.com/v1/chat/completions` |
+| **Default model** | `nvidia/Nemotron-3.5-Lightning` |
 | **Feature** | Natural-language menu Q&A — only real available dishes |
 
 API key stays on the server. It never reaches the browser.
-
-Free key: [console.groq.com](https://console.groq.com) → API Keys → Create (no credit card).
 
 ---
 
@@ -28,7 +27,7 @@ Free key: [console.groq.com](https://console.groq.com) → API Keys → Create (
 - Cart, coupons, order tracking
 - Staff queue + order accept / reject flow
 - Role-based access (Customer, Staff, Canteen Admin, Institution Admin, Super Admin)
-- **Ask the counter** powered by **Groq** (Llama 3.3 70B free)
+- **Ask the counter** powered by **NVIDIA Nemotron on Nebius Token Factory**
 - **Admin sales insights** for 14-day item demand, top sellers, and combo ideas
 - **Demand-based pricing** with admin-configurable sales thresholds, peak alerts, and delayed automatic price adjustments
 - Demo mode payments (optional Razorpay support)
@@ -65,10 +64,10 @@ cd civic-ever-spark-pepper
 npm install
 
 # 3. Environment (create .env)
-# Required for AI feature (free key from console.groq.com):
-GROQ_API_KEY=gsk_...
+# Required for AI feature:
+NEBIUS_API_KEY=your_nebius_token_factory_key
 # Optional:
-GROQ_MODEL=llama-3.3-70b-versatile
+NEBIUS_MODEL=nvidia/Nemotron-3.5-Lightning
 
 # 4. Run
 npm run dev
@@ -91,8 +90,8 @@ App runs at `http://localhost:8080`
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GROQ_API_KEY` | For AI feature | Free key from [console.groq.com](https://console.groq.com) |
-| `GROQ_MODEL` | No | Defaults to `llama-3.3-70b-versatile` |
+| `NEBIUS_API_KEY` | For AI feature | Nebius Token Factory API key |
+| `NEBIUS_MODEL` | No | Defaults to `nvidia/Nemotron-3.5-Lightning` |
 | `DATABASE_URL` | Production | Postgres connection string |
 | `BETTER_AUTH_URL` | Production | e.g. `https://your-app.vercel.app` |
 | `BETTER_AUTH_SECRET` | Production | Random secret for sessions |
@@ -109,9 +108,9 @@ App runs at `http://localhost:8080`
 1. Student opens a canteen menu.
 2. Types a question in **"Ask the counter"** (e.g. "What vegetarian snacks are under ₹50?").
 3. Server builds a fresh catalogue snapshot (only available items).
-4. Calls **Groq** (`api.groq.com`) with Llama 3.3 70B.
+4. Calls **Nebius Token Factory** with **NVIDIA Nemotron**.
 5. Strict system prompt forces the model to answer only from the real menu.
-6. Reply is shown instantly. If the key is missing, the UI says Groq is not connected (no hallucinated answers).
+6. Reply is shown instantly. If the key is missing, the UI says Nebius is not connected (no hallucinated answers).
 
 Source: `src/lib/canteen/nemotron.server.ts`
 
@@ -133,7 +132,7 @@ The `/analytics` dashboard reports paid-order KPIs, item/category performance, I
 
 ```
 src/
-  lib/canteen/          # Domain logic + AI (Groq) integration
+  lib/canteen/          # Domain logic + Nemotron on Nebius
   routes/               # Pages (menu, cart, staff, admin...)
   components/
 canteen-analytics.js   # Shared sales ranking and recommendation validation
@@ -146,3 +145,14 @@ migrations/             # Database migrations + seed data
 ## License
 
 MIT License – see [LICENSE](LICENSE)
+
+---
+
+## Hackathon Submission Notes
+
+- **Track suggestion**: Best Apps and Agents
+- Public repository: this repo
+- Open source license: MIT
+- NVIDIA model used: `nvidia/Nemotron-3.5-Lightning`
+- Nebius product used: Token Factory
+
