@@ -239,6 +239,19 @@ export const auth = betterAuth({
   // Vercel hosts, AND local loopback variants, or clients get "Invalid origin".
   trustedOrigins,
 
+  // Production defaults are strict (e.g. ~3 sign-in attempts / 10s). Failed
+  // origin/debug attempts on Vercel hit that quickly → "Too many requests".
+  // Relax for demo / multi-role testing; still blocks pure flood abuse.
+  rateLimit: {
+    window: 60,
+    max: 120,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 30 },
+      "/sign-up/email": { window: 60, max: 15 },
+      "/get-session": false,
+    },
+  },
+
   // Encrypt broker-issued OAuth tokens at rest, and treat the broker's upstreams
   // as trusted first-party identities. The broker owns identity and X emails are
   // synthetic/unverified, so WITHOUT this a login can fail with
@@ -278,6 +291,10 @@ export const auth = betterAuth({
   advanced: {
     useSecureCookies: false,
     defaultCookieAttributes: { secure: true, sameSite: "lax", path: "/" },
+    // Vercel / proxies: real client IP lives in these headers (rate limit key).
+    ipAddress: {
+      ipAddressHeaders: ["x-forwarded-for", "x-real-ip", "cf-connecting-ip"],
+    },
     cookies: {
       session_token: { name: SESSION_TOKEN_COOKIE },
       session_data: { name: "__Host-grok-auth.session_data" },
