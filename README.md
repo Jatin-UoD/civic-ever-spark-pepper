@@ -18,6 +18,16 @@ Built for the **Nebius × NVIDIA Global AI Hackathon**.
 
 API key stays on the server. It never reaches the browser.
 
+### Feedback on Nebius Token Factory and NVIDIA Nemotron
+
+Required for the hackathon. This is what we actually hit while building Ask the counter.
+
+- **What we used them for:** A live menu assistant. The server sends only the current canteen catalogue to `https://api.tokenfactory.nebius.com/v1/chat/completions` and asks `nvidia/Nemotron-3.5-Lightning` to suggest dishes that are really on that menu.
+- **What worked:** The API is OpenAI-compatible, so the call is one JSON request. A strict system prompt keeps answers on the catalogue instead of inventing dishes or prices. If the key is missing, the app refuses to answer rather than faking a reply.
+- **What needs work:** Creating an API key still requires a billing account and a bank card. A hackathon promo code adds credits only after that card step. A student with a promo code and no card cannot finish onboarding, so the feature cannot be demonstrated live.
+- **Onboarding:** Google or GitHub sign-in and the model id were clear. The card wall was the stop.
+- **Would we build with them again?** Yes, once a promo code can create a key without a card. The inference API itself is the right shape for this app.
+
 ---
 
 ## Features
