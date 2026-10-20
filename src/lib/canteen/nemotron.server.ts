@@ -1,6 +1,10 @@
 import { CanteenError } from "./domain.ts";
 
-const DEFAULT_MODEL = "nvidia/Nemotron-3.5-Lightning";
+/** Free NVIDIA NIM endpoint (OpenAI-compatible). Key from https://build.nvidia.com */
+const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+
+/** Default free Nemotron model on NVIDIA build catalog */
+const DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 type MenuSnap = {
   canteen: { name: string; status: string };
@@ -8,37 +12,52 @@ type MenuSnap = {
   combos: { name: string; availability: string; pricePaise: number }[];
 };
 
+function resolveApiKey(): string | undefined {
+  const key =
+    process.env.NVIDIA_API_KEY?.trim() ||
+    process.env.NGC_API_KEY?.trim() ||
+    process.env.NVIDIA_NIM_API_KEY?.trim();
+  return key || undefined;
+}
+
 export async function askNemotron(menu: MenuSnap, question: string) {
-  const key = process.env.NEBIUS_API_KEY?.trim();
+  const key = resolveApiKey();
   if (!key) {
     throw new CanteenError(
       "NO_KEY",
-      "Nebius is not connected. Add NEBIUS_API_KEY on the server, then ask again.",
+      "NVIDIA is not connected. Add NVIDIA_API_KEY (free key from build.nvidia.com) on the server, then ask again.",
     );
   }
-  const model = process.env.NEBIUS_MODEL?.trim() || DEFAULT_MODEL;
+  const model = process.env.NVIDIA_MODEL?.trim() || DEFAULT_MODEL;
   const catalogue = [
     ...menu.items
       .filter((item) => item.availability !== "HIDDEN")
       .slice(0, 60)
       .map((item) => {
-        const price = item.basePricePaise == null ? "price not set" : `₹${Math.round((item.basePricePaise - item.discountPaise) / 100)}`;
+        const price =
+          item.basePricePaise == null
+            ? "price not set"
+            : `₹${Math.round((item.basePricePaise - item.discountPaise) / 100)}`;
         return `${item.name} | ${item.diet} | ${item.availability} | ${price}`;
       }),
-    ...menu.combos.map((combo) => `${combo.name} | combo | ${combo.availability} | ₹${Math.round(combo.pricePaise / 100)}`),
+    ...menu.combos.map(
+      (combo) =>
+        `${combo.name} | combo | ${combo.availability} | ₹${Math.round(combo.pricePaise / 100)}`,
+    ),
   ].join("\n");
 
-  const response = await fetch("https://api.tokenfactory.nebius.com/v1/chat/completions", {
+  const response = await fetch(NVIDIA_CHAT_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
     },
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(30_000),
     body: JSON.stringify({
       model,
       temperature: 0.3,
       max_tokens: 220,
+      stream: false,
       messages: [
         {
           role: "system",
@@ -58,8 +77,8 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     throw new CanteenError(
       "NEMOTRON",
       response.status === 401
-        ? "Nebius rejected the API key."
-        : `Nemotron did not answer (${response.status}). ${detail.slice(0, 180)}`,
+        ? "NVIDIA rejected the API key. Get a free key at build.nvidia.com."
+        : `NVIDIA Nemotron did not answer (${response.status}). ${detail.slice(0, 180)}`,
     );
   }
   const body = (await response.json()) as {
@@ -67,10 +86,10 @@ export async function askNemotron(menu: MenuSnap, question: string) {
     model?: string;
   };
   const answer = body.choices?.[0]?.message?.content?.trim();
-  if (!answer) throw new CanteenError("NEMOTRON", "Nemotron returned an empty reply.");
+  if (!answer) throw new CanteenError("NEMOTRON", "NVIDIA returned an empty reply.");
   return {
     answer,
     model: body.model || model,
-    provider: "Nebius Token Factory",
+    provider: "NVIDIA NIM (build.nvidia.com)",
   };
 }
