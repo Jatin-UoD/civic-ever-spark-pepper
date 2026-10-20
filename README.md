@@ -10,14 +10,14 @@ Multi-tenant canteen ordering platform for colleges, hostels, offices and food c
 
 | Item | Value |
 |------|--------|
-| **Provider** | [NVIDIA NIM](https://build.nvidia.com) free endpoint |
-| **API** | `https://integrate.api.nvidia.com/v1/chat/completions` |
-| **Default model** | `nvidia/nemotron-3.5-lightning-30b-a3b` |
+| **Provider** | [Groq](https://console.groq.com) free tier |
+| **API** | `https://api.groq.com/openai/v1/chat/completions` |
+| **Default model** | `llama-3.3-70b-versatile` |
 | **Feature** | Natural-language menu Q&A — only real available dishes |
 
 API key stays on the server. It never reaches the browser.
 
-Free key: sign up at [build.nvidia.com](https://build.nvidia.com) → Get API Key (NVIDIA Developer Program; no credit card).
+Free key: [console.groq.com](https://console.groq.com) → API Keys → Create (no credit card).
 
 ---
 
@@ -28,7 +28,7 @@ Free key: sign up at [build.nvidia.com](https://build.nvidia.com) → Get API Ke
 - Cart, coupons, order tracking
 - Staff queue + order accept / reject flow
 - Role-based access (Customer, Staff, Canteen Admin, Institution Admin, Super Admin)
-- **Ask the counter** powered by **NVIDIA Nemotron** (free NIM API)
+- **Ask the counter** powered by **Groq** (Llama 3.3 70B free)
 - **Admin sales insights** for 14-day item demand, top sellers, and combo ideas
 - **Demand-based pricing** with admin-configurable sales thresholds, peak alerts, and delayed automatic price adjustments
 - Demo mode payments (optional Razorpay support)
@@ -65,10 +65,10 @@ cd civic-ever-spark-pepper
 npm install
 
 # 3. Environment (create .env)
-# Required for AI feature (free key from build.nvidia.com):
-NVIDIA_API_KEY=nvapi-...
+# Required for AI feature (free key from console.groq.com):
+GROQ_API_KEY=gsk_...
 # Optional:
-NVIDIA_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b
+GROQ_MODEL=llama-3.3-70b-versatile
 
 # 4. Run
 npm run dev
@@ -91,8 +91,8 @@ App runs at `http://localhost:8080`
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NVIDIA_API_KEY` | For AI feature | Free key from [build.nvidia.com](https://build.nvidia.com) |
-| `NVIDIA_MODEL` | No | Defaults to `nvidia/nemotron-3.5-lightning-30b-a3b` |
+| `GROQ_API_KEY` | For AI feature | Free key from [console.groq.com](https://console.groq.com) |
+| `GROQ_MODEL` | No | Defaults to `llama-3.3-70b-versatile` |
 | `DATABASE_URL` | Production | Postgres connection string |
 | `BETTER_AUTH_URL` | Production | e.g. `https://your-app.vercel.app` |
 | `BETTER_AUTH_SECRET` | Production | Random secret for sessions |
@@ -109,9 +109,9 @@ App runs at `http://localhost:8080`
 1. Student opens a canteen menu.
 2. Types a question in **"Ask the counter"** (e.g. "What vegetarian snacks are under ₹50?").
 3. Server builds a fresh catalogue snapshot (only available items).
-4. Calls **NVIDIA integrate.api.nvidia.com** with a free Nemotron model.
+4. Calls **Groq** (`api.groq.com`) with Llama 3.3 70B.
 5. Strict system prompt forces the model to answer only from the real menu.
-6. Reply is shown instantly. If the key is missing, the UI says NVIDIA is not connected (no hallucinated answers).
+6. Reply is shown instantly. If the key is missing, the UI says Groq is not connected (no hallucinated answers).
 
 Source: `src/lib/canteen/nemotron.server.ts`
 
@@ -133,7 +133,7 @@ The `/analytics` dashboard reports paid-order KPIs, item/category performance, I
 
 ```
 src/
-  lib/canteen/          # Domain logic + Nemotron integration
+  lib/canteen/          # Domain logic + AI (Groq) integration
   routes/               # Pages (menu, cart, staff, admin...)
   components/
 canteen-analytics.js   # Shared sales ranking and recommendation validation
